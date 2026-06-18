@@ -1,0 +1,135 @@
+[versions]
+    java = "25"
+
+# General dependencies
+    minecraft-range = "26.1.2"
+    minecraft-range-fabric = "26.1.2"
+    minecraft = "26.1.2"
+    # Get versions from https://parchmentmc.org/docs/getting-started
+    #parchment-minecraft = "26.1-snapshot-1"
+    #parchment = "2025.12.20"
+    # Get versions from https://projects.neoforged.net/neoforged/neoform
+    neoform = "26.1.2-1" # vanilla neoforge configuration
+
+# Mod dependencies
+    filloaxlib = "0.36.0-26.1"   # todo: update filloaxlib
+    modmenu = "18.0.0-beta.1"
+    rconfig = "4.0.1"
+    rconfigMc = "26.1"
+
+# Mod compatibility dependencies (todo: re-enabled if needed after 26.1 transition)
+    lithostitched-neoforge = "1.7.9-neoforge-26.1"
+    lithostitched-fabric = "1.7.9-fabric-26.1"
+    cobblemon = "1.7.1+1.21.1"
+    rctapi = "1.21.1-0.14.4" # only used for prop replacement in mod json files
+    rctapi-neoforge = "7257753"
+    rctapi-fabric = "7257754"
+    megashowdown = "1.5+1.7.1+1.21.1" # only used for prop replacement in mod json files
+    megashowdown-fabric = "xcwqvGEd" # only used for datagen
+    architectury-fabric = "13.0.8+fabric" # only used for datagen (for mega showdown)
+    navas-zamega = "1.4.5"
+    endremastered = "6.0.2"
+    endremastered-neoforge = "aqYxfNAS"
+
+# Kotlin
+    kotlin = "2.3.21"
+    kotlin-serialization = "1.9.0"
+    kotlin-datetime = "0.7.1"
+
+# Fabric Settings
+    # Get versions from https://github.com/FabricMC/fabric-loader/releases
+    fabric = "0.18.6"
+    # Get versions from https://modrinth.com/mod/fabric-api/versions
+    fabric-api = "0.149.1+26.1.2"
+    fabric-language-kotlin = "1.13.11+kotlin.2.3.21"
+
+# Neoforge Settings
+    # Get versions from https://projects.neoforged.net/neoforged/neoforge
+    neoforge = "26.1.2.71"
+    neoforge-range = "[26.1.2.71,26.2)"
+    kotlinforge = "6.2.0"
+    kotlinforge-range = "[6.2.0,)"
+
+# Other dependencies
+    mixin = "0.8.7"
+    mixinextras = "0.5.3"
+    mixinextras-range = "[0.5.3,)"
+    jsr305 = "3.0.2"
+    # Specific log4j version required by neoform
+    log4j = "2.22.1"
+    # Specific ow-asm version required by neoforge
+    ow-asm = "9.3"
+    kotlinevents = "v2.0"
+
+# Plugins
+    plugin-dokka = "2.0.0"
+    plugin-mixin = "0.7.38"
+    plugin-loom = "1.16-SNAPSHOT"
+    # Get versions from https://projects.neoforged.net/neoforged/moddevgradle
+    plugin-moddev = "2.0.141"
+    plugin-idea-ext = "1.4.1"
+
+[libraries]
+# Mods
+    # filloaxlib depends on various things, so define in build.gradle
+    modmenu = { group = "com.terraformersmc", name = "modmenu", version.ref = "modmenu" }
+    # name depends on mc version, so define in build.gradle
+    # rconfig = { group = "com.teamresourceful.resourcefulconfig", name = "resourcefulconfig-common-", version.ref = "modmenu" }
+
+# Mod compatibility
+    #lithostitched = { group = "maven.modrinth", name = "lithostitched", version.ref = "lithostitched" }
+    lithostitched-neoforge = { group = "maven.modrinth", name = "lithostitched", version.ref = "lithostitched-neoforge" }
+    lithostitched-fabric = { group = "maven.modrinth", name = "lithostitched", version.ref = "lithostitched-fabric" }
+    rctapi-fabric = { group = "curse.maven", name = "radical-cobblemon-trainers-api-1152792", version.ref = "rctapi-fabric" }
+    rctapi-neoforge = { group = "curse.maven", name = "radical-cobblemon-trainers-api-1152792", version.ref = "rctapi-neoforge" }
+    cobblemon-fabric = { group = "com.cobblemon", name = "fabric", version.ref = "cobblemon" }
+    cobblemon-neoforge = { group = "com.cobblemon", name = "neoforge", version.ref = "cobblemon" }
+    # only needed in fabric for datagen
+    megashowdown-fabric = { group = "maven.modrinth", name = "cobblemon-mega-showdown", version.ref = "megashowdown-fabric" }
+    # only needed in fabric for datagen
+    architectury-fabric = { group = "maven.modrinth", name = "architectury-api", version.ref = "architectury-fabric" }
+    navas-zamega = { group = "maven.modrinth", name = "navas-zamega", version.ref = "navas-zamega" }
+    endremastered = { group = "maven.modrinth", name = "endrem", version.ref = "endremastered" }
+    endremastered-neoforge = { group = "maven.modrinth", name = "endrem", version.ref = "endremastered-neoforge" }
+
+# Mixin
+    mixin = { group = "org.spongepowered", name = "mixin", version.ref = "mixin" }
+    mixinextras-common = { group = "io.github.llamalad7", name = "mixinextras-common", version.ref = "mixinextras" }
+
+# Kotlin
+    kotlin-stdlib = { group = "org.jetbrains.kotlin", name = "kotlin-stdlib", version.ref = "kotlin" }
+    kotlin-reflect = { group = "org.jetbrains.kotlin", name = "kotlin-reflect", version.ref = "kotlin" }
+    kotlin-serialization = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "kotlin-serialization" }
+    kotlin-datetime = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime", version.ref = "kotlin-datetime" }
+    kotlin-datetime-jvm = { group = "org.jetbrains.kotlinx", name = "kotlinx-datetime-jvm", version.ref = "kotlin-datetime" }
+
+# Platform
+    fabric = { group = "net.fabricmc", name = "fabric-loader", version.ref = "fabric" }
+    fabric-api = { group = "net.fabricmc.fabric-api", name = "fabric-api", version.ref = "fabric-api" }
+    fabric-kotlin = { group = "net.fabricmc", name = "fabric-language-kotlin", version.ref = "fabric-language-kotlin" }
+    kotlinforge = { group = "thedarkcolour", name = "kotlinforforge-neoforge", version.ref = "kotlinforge" }
+    minecraft = { group = "com.mojang", name = "minecraft", version.ref = "minecraft" }
+
+# Misc
+    jsr305 = { group = "com.google.code.findbugs", name = "jsr305", version.ref = "jsr305" }
+    log4j = { group = "org.apache.logging.log4j", name = "log4j-core", version.ref = "log4j" }
+    ow-asm = { group = "org.ow2.asm", name = "asm", version.ref = "ow-asm" }
+    kotlinevents = { group = "com.github.stuhlmeier", name = "kotlin-events", version.ref = "kotlinevents" }
+
+# Plugin dependencies (for buildSrc)
+    plugin-kotlin-jvm = { group = "org.jetbrains.kotlin.jvm", name = "org.jetbrains.kotlin.jvm.gradle.plugin", version.ref = "kotlin" }
+    plugin-kotlin-serialization = { group = "org.jetbrains.kotlin", name = "kotlin-serialization", version.ref = "kotlin" }
+    plugin-dokka-javadoc = { group = "org.jetbrains.dokka-javadoc", name = "org.jetbrains.dokka-javadoc.gradle.plugin", version.ref = "plugin-dokka" }
+
+[plugins]
+# Kotlin
+    kotlin-jvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
+    kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+
+# Platform
+    moddevgradle = { id = "net.neoforged.moddev", version.ref = "plugin-moddev" }
+    loom = { id = "net.fabricmc.fabric-loom", version.ref = "plugin-loom" }
+
+# Misc
+    ideaext = { id = "org.jetbrains.gradle.plugin.idea-ext", version.ref = "plugin-idea-ext" }
+    plugin-mixin = { id = "org.spongepowered.mixin", version.ref = "plugin-mixin" }

@@ -1,0 +1,34 @@
+modLoader="kotlinforforge"
+loaderVersion="${kotlinforge_version_range}"
+
+license="${license}"
+issueTrackerURL="https://github.com/filloax/ruins-of-growsseth/issues"
+
+[[mods]]
+    modId="${mod_id}"
+    version="${version_prefix}-neoforge"
+    displayName="${mod_name}"
+    displayURL="https://github.com/filloax/ruins-of-growsseth"
+    logoFile="${mod_icon}"
+    authors="Filloax"
+    description='''Generic gamemaster/website connection layer extracted from Ruins of Growsseth.'''
+
+[[dependencies]]
+    modId="neoforge"
+    type="required"
+    versionRange="${neoforge_version_range}"
+
+[[dependencies]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+
+[[dependencies]]
+    modId="filloaxlib"
+    type="required"
+    versionRange="[${filloaxlib_version},)"
+
+[[dependencies]]
+    modId="resourcefulconfig"
+    type="required"
+    versionRange="[${rconfig_version},)"
