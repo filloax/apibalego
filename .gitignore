@@ -29,3 +29,4 @@ run/
 #misc
 temp/**
 logs/*
+**/logs/
