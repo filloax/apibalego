@@ -39,6 +39,28 @@ dependencies {
 
 	compileOnly(utils.getResourcefulConfig())
 	compileOnly(utils.getFilloaxlib())
+
+    //#region Test deps
+
+	// MC classes: reuse the deobfuscated jar from the moddevgradle vanilla-mode task
+	testImplementation(files(tasks.named("createMinecraftArtifacts").map { it.outputs.files }))
+	// MC runtime deps (brigadier, log4j, authlib, …): same BOM neoform pulls in
+	testImplementation("net.neoforged:minecraft-dependencies:$minecraftVersion")
+
+	socketIoLibs.forEach { testImplementation(it) }
+	testImplementation(utils.getFilloaxlib()) { exclude(module = "kotlin-stdlib") }
+	testImplementation(libs.kotlin.serialization) { exclude(module = "kotlin-stdlib") }
+	testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+	testImplementation("org.mockito:mockito-core:5.14.2")
+	testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
+
+    //#endregion
+}
+
+tasks.test {
+	useJUnitPlatform()
+	jvmArgs("-Dnet.bytebuddy.experimental=true")
 }
 
 configurations {

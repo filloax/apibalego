@@ -16,8 +16,13 @@ import kotlin.concurrent.thread
  * Connect to an endpoint to be able to remotely trigger updates and run commands past the
  * usual polling interval. Listens for the event types registered in [LiveUpdatesEventRegistry].
  * Class lifetime should be same as the server, just in case.
+ *
+ * @param socketFactory Normally just a socket.io socket, instanced differently in tests.
  */
-class LiveUpdatesConnection internal constructor(val server: MinecraftServer? = null) : ResponseSender {
+class LiveUpdatesConnection internal constructor(
+    val server: MinecraftServer? = null,
+    private val socketFactory: (URI, IO.Options) -> Socket = Companion::defaultSocket,
+) : ResponseSender {
     private var running = true
     private var socket: Socket? = null
     private var thread: Thread? = null
@@ -36,6 +41,8 @@ class LiveUpdatesConnection internal constructor(val server: MinecraftServer? = 
         }
 
         private var activeConnection: LiveUpdatesConnection? = null
+
+        private fun defaultSocket(uri: URI, options: IO.Options): Socket = IO.socket(uri, options)
 
         fun serverStart(server: MinecraftServer) {
             // todo: fix Neoforge compatibility
@@ -89,7 +96,7 @@ class LiveUpdatesConnection internal constructor(val server: MinecraftServer? = 
                 val options = IO.Options.builder()
                     .setExtraHeaders(mapOf("apiKey" to listOf(ApiBalegoConfig.dataSyncApiKey)))
                     .build()
-                val newSocket = IO.socket(uri, options)
+                val newSocket = socketFactory(uri, options)
 
                 newSocket.on(Socket.EVENT_CONNECT) {
                     logInfo("Connected to $uri")

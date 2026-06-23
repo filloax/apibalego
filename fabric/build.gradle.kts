@@ -90,12 +90,5 @@ dependencies {
 	implementation( libs.kotlinevents )
 	include( libs.kotlinevents )
 
-	testImplementation("org.junit.jupiter:junit-jupiter:5.11.4")
-	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-	testImplementation("org.mockito:mockito-core:5.14.2")
-	testImplementation("org.mockito.kotlin:mockito-kotlin:5.4.0")
 }
 
-tasks.test {
-	useJUnitPlatform()
-}

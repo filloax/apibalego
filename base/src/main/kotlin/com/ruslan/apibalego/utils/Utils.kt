@@ -13,8 +13,9 @@ fun resLoc(str: String): Identifier {
 
 class ApibalegoLogger(private val logger: Logger) {
     private val prefix by lazy {
-        // The prefix is already present on Neoforge and Fabric's dev env
-        if (Apibalego.isNeoforge || FxLibServices.platform.isDevEnvironment()) ""
+        // The prefix is already present on Neoforge and Fabric's dev env.
+        // runCatching guards against NPE when no platform launcher is available (unit tests).
+        if (Apibalego.isNeoforge || runCatching { FxLibServices.platform.isDevEnvironment() }.getOrDefault(false)) ""
         else "[$MOD_NAME] "
     }
     fun log(level: Level, msg: String, vararg params: Any?) = logger.log(level, "$prefix$msg", *params)
