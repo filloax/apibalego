@@ -68,6 +68,35 @@ object ApibalegoGameTests {
         helper.succeed()
     }
 
+    /** Active join events are dispatched to registered join handlers, once per player. */
+    fun dispatchJoinActive(helper: GameTestHelper) {
+        val counter = AtomicInteger(0)
+        val prefix = "gametest_join_active"
+        ApiEventRegistry.registerJoinHandler(prefix) { _, _ -> counter.incrementAndGet() }
+        val events = listOf(GenericApiEvent(name = "$prefix/x", active = true))
+        @Suppress("DEPRECATION")
+        ApiEventRegistry.dispatchJoin(events, helper.makeMockServerPlayerInLevel())
+        @Suppress("DEPRECATION")
+        ApiEventRegistry.dispatchJoin(events, helper.makeMockServerPlayerInLevel())
+        check(counter.get() == 2) { "Join handler should run once per player (2), ran ${counter.get()}" }
+        helper.succeed()
+    }
+
+    /** Inactive join events are not dispatched. */
+    fun dispatchJoinInactiveSkipped(helper: GameTestHelper) {
+        val counter = AtomicInteger(0)
+        val prefix = "gametest_join_inactive"
+        ApiEventRegistry.registerJoinHandler(prefix) { _, _ -> counter.incrementAndGet() }
+        @Suppress("DEPRECATION")
+        val player = helper.makeMockServerPlayerInLevel()
+        ApiEventRegistry.dispatchJoin(
+            listOf(GenericApiEvent(name = "$prefix/x", active = false)),
+            player,
+        )
+        check(counter.get() == 0) { "Inactive join event must not be dispatched" }
+        helper.succeed()
+    }
+
     // TODO: live update works test
 
     /** Toast packet constructs and preserves its fields in the game environment. */

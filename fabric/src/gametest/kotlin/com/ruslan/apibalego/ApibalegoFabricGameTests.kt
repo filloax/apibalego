@@ -25,5 +25,11 @@ object ApibalegoFabricGameTests {
     fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) = ApibalegoGameTests.liveUpdatesBuiltinsRegistered(helper)
 
     @GameTest
+    fun dispatchJoinActive(helper: GameTestHelper) = ApibalegoGameTests.dispatchJoinActive(helper)
+
+    @GameTest
+    fun dispatchJoinInactiveSkipped(helper: GameTestHelper) = ApibalegoGameTests.dispatchJoinInactiveSkipped(helper)
+
+    @GameTest
     fun toastPacketBuilds(helper: GameTestHelper) = ApibalegoGameTests.toastPacketBuilds(helper)
 }

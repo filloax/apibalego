@@ -8,6 +8,7 @@ import com.ruslan.apibalego.http.RemoteCommandExec
 import com.ruslan.apibalego.http.handlers.ToastHandler
 import com.ruslan.apibalego.network.ApiBalegoPackets
 import com.ruslan.apibalego.utils.ApibalegoLogger
+import net.minecraft.server.level.ServerPlayer
 import org.apache.logging.log4j.LogManager
 
 /**
@@ -24,6 +25,9 @@ abstract class Apibalego {
         val LOGGER = ApibalegoLogger(LogManager.getLogger(MOD_NAME))
 
         var isNeoforge = false      // set to true in ApiBalegoNeo for custom logic
+
+        /** Consumer mods add join-dispatch behavior here (called on every player join). */
+        val onPlayerJoinHooks = mutableListOf<(ServerPlayer) -> Unit>()
 
         private var initialized = false
 

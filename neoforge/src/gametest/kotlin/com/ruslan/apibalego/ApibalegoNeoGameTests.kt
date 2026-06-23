@@ -22,6 +22,8 @@ object ApibalegoNeoGameTests {
         "api_event_dispatch_active" to Consumer { ApibalegoGameTests.apiEventDispatchActive(it) },
         "api_event_dispatch_inactive_skipped" to Consumer { ApibalegoGameTests.apiEventDispatchInactiveSkipped(it) },
         "live_updates_builtins_registered" to Consumer { ApibalegoGameTests.liveUpdatesBuiltinsRegistered(it) },
+        "dispatch_join_active" to Consumer { ApibalegoGameTests.dispatchJoinActive(it) },
+        "dispatch_join_inactive_skipped" to Consumer { ApibalegoGameTests.dispatchJoinInactiveSkipped(it) },
         "toast_packet_builds" to Consumer { ApibalegoGameTests.toastPacketBuilds(it) },
     )
 

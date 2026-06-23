@@ -15,6 +15,7 @@ import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
+import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.level.Level
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -308,6 +309,10 @@ object DataRemoteSync {
                     doOnNextServerStart.poll()(server)
                 }
             }
+        }
+
+        fun onPlayerJoin(player: ServerPlayer) {
+            Apibalego.onPlayerJoinHooks.forEach { it(player) }
         }
 
         fun onServerTick(url: String, server: MinecraftServer) {
