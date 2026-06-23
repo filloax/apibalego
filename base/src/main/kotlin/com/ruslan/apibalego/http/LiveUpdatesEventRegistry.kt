@@ -25,5 +25,5 @@ object LiveUpdatesEventRegistry {
         }
     }
 
-    internal fun all(): Map<String, LiveUpdatesEventHandler> = handlers
+    fun all(): Map<String, LiveUpdatesEventHandler> = handlers
 }

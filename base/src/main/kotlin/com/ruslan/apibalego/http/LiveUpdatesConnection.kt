@@ -17,10 +17,12 @@ import kotlin.concurrent.thread
  * usual polling interval. Listens for the event types registered in [LiveUpdatesEventRegistry].
  * Class lifetime should be same as the server, just in case.
  */
-class LiveUpdatesConnection private constructor(val server: MinecraftServer) : ResponseSender {
+class LiveUpdatesConnection internal constructor(val server: MinecraftServer? = null) : ResponseSender {
     private var running = true
     private var socket: Socket? = null
     private var thread: Thread? = null
+    // Abstraction over the raw socket.io socket to more easily mock it for tests
+    internal var liveSocket: LiveSocket? = null
     // Socketio is non blocking, since this was initially
     // made for blocking sockets simulate that behavior
     private var asyncLock: Lock = ReentrantLock()
@@ -144,7 +146,7 @@ class LiveUpdatesConnection private constructor(val server: MinecraftServer) : R
     private fun sendOnSocket(message: String) {
         try {
             logInfo("Sending message on socket: $message")
-            socket?.emit("mod_response", message) ?: run {
+            liveSocket?.send(message) ?: run {
                 Apibalego.LOGGER.error("Couldn't send message $message: socket null")
             }
         } catch (e: Exception) {
@@ -171,6 +173,24 @@ class LiveUpdatesConnection private constructor(val server: MinecraftServer) : R
     }
 
     /**
+     * Wire every [LiveUpdatesEventRegistry] handler onto the socket. Extracted from [listen]
+     * so it can be exercised against a mocked socket in tests.
+     */
+    internal fun bindHandlers(socket: LiveSocket) {
+        val server = this.server ?: error("Cannot bind live update handlers without a server")
+        LiveUpdatesEventRegistry.all().forEach { (eventType, handler) ->
+            socket.on(eventType) { message ->
+                try {
+                    handler.handle(message, server, this)
+                } catch (e: Exception) {
+                    logError("Error handling live update '$eventType': ${e.stackTraceToString()}")
+                    sendFailure(e.message)
+                }
+            }
+        }
+    }
+
+    /**
      * RUN ONLY INSIDE SECONDARY THREAD
      *
      * The main loop, listen for triggers from the registered live update handlers.
@@ -178,17 +198,8 @@ class LiveUpdatesConnection private constructor(val server: MinecraftServer) : R
     private fun listen() {
         try {
             socket?.let { socket ->
-                LiveUpdatesEventRegistry.all().forEach { (eventType, handler) ->
-                    socket.on(eventType) { args ->
-                        val message = args.getOrNull(0)?.toString() ?: ""
-                        try {
-                            handler.handle(message, server, this)
-                        } catch (e: Exception) {
-                            logError("Error handling live update '$eventType': ${e.stackTraceToString()}")
-                            sendFailure(e.message)
-                        }
-                    }
-                }
+                liveSocket = socket.asLiveSocket()
+                bindHandlers(liveSocket!!)
             } ?: run {
                 logError("Socket is null!")
             }
@@ -241,5 +252,24 @@ class LiveUpdatesConnection private constructor(val server: MinecraftServer) : R
 
     private fun logError(message: String) {
         Apibalego.LOGGER.error("LiveUpdatesConnection | $message")
+    }
+}
+
+/**
+ * Minimal seam over the socket.io socket: register an event listener and push a response.
+ * Lets tests drive [LiveUpdatesConnection] with a plain fake instead of a real socket.io connection.
+ */
+internal interface LiveSocket {
+    fun on(event: String, handler: (String) -> Unit)
+    fun send(message: String)
+}
+
+private fun Socket.asLiveSocket(): LiveSocket = object : LiveSocket {
+    override fun on(event: String, handler: (String) -> Unit) {
+        this@asLiveSocket.on(event) { args -> handler(args.getOrNull(0)?.toString() ?: "") }
+    }
+
+    override fun send(message: String) {
+        this@asLiveSocket.emit("mod_response", message)
     }
 }

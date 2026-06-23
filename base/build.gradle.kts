@@ -2,6 +2,7 @@ import com.ruslan.gradle.*
 
 plugins {
 	id("com.ruslan.gradle.multiloader-convention")
+	id("com.ruslan.gradle.multiloader-gametest-base")
 
 	alias(libs.plugins.moddevgradle)
 }

@@ -3,6 +3,7 @@ import com.ruslan.gradle.*
 plugins {
     // see buildSrc
     id("com.ruslan.gradle.multiloader-loader")
+    id("com.ruslan.gradle.multiloader-gametest-loader")
 
     alias(libs.plugins.moddevgradle)
 }
@@ -21,21 +22,35 @@ version = "$modVersion-$minecraftVersion$versionSuffix-neoforge"
 
 if (includeDeps) println("Including dependencies for test mode")
 
+// Game tests live in their own source set so they are never part of the released jar
+val gametest: SourceSet = sourceSets.create("gametest") {
+    compileClasspath += sourceSets.main.get().compileClasspath + sourceSets.main.get().output
+    runtimeClasspath += sourceSets.main.get().runtimeClasspath + sourceSets.main.get().output
+}
+
 neoForge {
     version = libs.versions.neoforge.asProvider().get()
 
     runs {
-        create("apibalego_client") {
+        create("client") {
             client()
+            ideName = "APIBalego - NeoForge Client"
         }
 
-        create("apibalego_server") {
+        create("server") {
             server()
+            ideName = "APIBalego - NeoForge Server"
+        }
+
+        create("gameTestServer") {
+            type = "gameTestServer"
+            ideName = "APIBalego - Game Test Server"
         }
 
         configureEach {
             systemProperty("forge.logging.markers", "REGISTRIES")
             systemProperty("neoforge.enabledGameTestNamespaces", modid)
+
             logLevel = org.slf4j.event.Level.DEBUG
         }
     }
@@ -43,12 +58,23 @@ neoForge {
     mods {
         register(modid) {
             sourceSet(sourceSets.main.get())
+            sourceSet(sourceSets["gametest"])
         }
     }
 }
 
+configurations {
+    create(COMMON_GAMETEST_RESOURCES) { isCanBeResolved = true }
+}
+
+tasks.named<ProcessResources>("processGametestResources") {
+    dependsOn(configurations.getByName(COMMON_GAMETEST_RESOURCES))
+    from(configurations.getByName(COMMON_GAMETEST_RESOURCES))
+}
+
 dependencies {
     implementation( libs.jsr305 )
+    COMMON_GAMETEST_RESOURCES(project(path = BASE_PROJECT, configuration = COMMON_GAMETEST_RESOURCES))
 
     socketIoLibs.forEach {
         implementation(it)

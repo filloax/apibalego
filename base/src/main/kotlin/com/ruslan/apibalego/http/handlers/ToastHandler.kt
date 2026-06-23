@@ -52,7 +52,7 @@ object ToastHandler {
 
     fun handleJoin(event: GenericApiEvent, player: ServerPlayer) {
         val seqId = event.pos?.let { "${it.x}${it.y}${it.z}" } ?: ""
-        val packet = getToastPacket(event, (player.level() as net.minecraft.server.level.ServerLevel).server)
+        val packet = getToastPacket(event, player.level().server)
         checkAndSendCustomToastEvent(player, packet, seqId)
     }
 

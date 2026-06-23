@@ -1,0 +1,1 @@
+- [ ] ApiEventRegistry.dispatchJoin is not called
