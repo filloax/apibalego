@@ -1,21 +1,16 @@
 package com.ruslan.apibalego.http
 
-import com.filloax.fxlib.api.savedata.FxSavedData
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonParseException
 import com.google.gson.reflect.TypeToken
-import com.mojang.serialization.Codec
-import com.mojang.serialization.codecs.RecordCodecBuilder
-import com.ruslan.apibalego.ApiBalegoConstants.DATASYNC_MEMORY_DATA
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
-import com.ruslan.apibalego.utils.resLoc
+import com.ruslan.apibalego.data.ApibalegoPersistentData
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.SerializationException
 import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
-import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.level.Level
 import java.io.BufferedReader
 import java.io.InputStreamReader
@@ -27,6 +22,10 @@ import java.time.LocalDateTime
 import java.util.concurrent.*
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Handles periodic requests to a specified endpoint (if enabled),
+ * with generic type parsed from the response as specified by caller.
+ */
 object DataRemoteSync {
     var lastSyncSuccessful = false
         private set
@@ -53,6 +52,10 @@ object DataRemoteSync {
     private val doOnNextServerStart = LinkedBlockingQueue<(MinecraftServer) -> Unit>()
     private val logger = Apibalego.LOGGER
 
+    /**
+     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
+     * parse the request as T.
+     */
     fun <T: Any>subscribe(endpoint: String, serializer: DeserializationStrategy<T>, callback: (T, MinecraftServer) -> Unit) {
         subscribeRaw(endpoint) { response, server ->
             try {
@@ -65,6 +68,10 @@ object DataRemoteSync {
         }
     }
 
+    /**
+     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
+     * parse the request as T.
+     */
     fun <T>subscribe(endpoint: String, type: Type, callback: (T, MinecraftServer) -> Unit) {
         subscribeRaw(endpoint) { response, server ->
             try {
@@ -77,6 +84,10 @@ object DataRemoteSync {
         }
     }
 
+    /**
+     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
+     * call the callback with the raw response.
+     */
     fun subscribeRaw(endpoint: String, callback: (String, MinecraftServer) -> Unit) {
         val adjEndpoint = if (endpoint.startsWith("/")) {
             endpoint.replace(Regex("^/"), "")
@@ -237,7 +248,7 @@ object DataRemoteSync {
     private fun saveEndpointToMemory(server: MinecraftServer, endpoint: String, response: String) {
         val overworld = getOverworldOrNull(server)
         if (overworld != null) {
-            val savedData = DataSyncMemorySavedData.get(overworld)
+            val savedData = ApibalegoPersistentData.get(server)
             savedData.lastEndpointOutputs[endpoint] = response
             savedData.setDirty()
             logger.info("Updated data sync save data")
@@ -259,7 +270,7 @@ object DataRemoteSync {
 
         val overworld = getOverworldOrNull(server)
         if (overworld != null) {
-            future.complete(DataSyncMemorySavedData.get(overworld).lastEndpointOutputs[endpoint])
+            future.complete(ApibalegoPersistentData.get(server).lastEndpointOutputs[endpoint])
         } else {
             doOnNextServerStart.offer {
                 restoreEndpointFromMemory(server, endpoint, future)
@@ -311,10 +322,6 @@ object DataRemoteSync {
             }
         }
 
-        fun onPlayerJoin(player: ServerPlayer) {
-            Apibalego.onPlayerJoinHooks.forEach { it(player) }
-        }
-
         fun onServerTick(url: String, server: MinecraftServer) {
             if (ApiBalegoConfig.webDataSync) {
                 val time = LocalDateTime.now()
@@ -329,21 +336,3 @@ object DataRemoteSync {
 }
 
 inline fun <reified T> genericType(): Type = object: TypeToken<T>() {}.type
-
-class DataSyncMemorySavedData private constructor (
-    lastEndpointOutputs: Map<String, String> = mapOf()
-) : FxSavedData<DataSyncMemorySavedData>(CODEC) {
-    val lastEndpointOutputs: MutableMap<String, String> = lastEndpointOutputs.toMutableMap()
-
-    companion object {
-        val CODEC: Codec<DataSyncMemorySavedData> = RecordCodecBuilder.create { builder -> builder.group(
-            Codec.unboundedMap(Codec.STRING, Codec.STRING).fieldOf("lastEndpointOutputs").forGetter(DataSyncMemorySavedData::lastEndpointOutputs)
-        ).apply(builder, ::DataSyncMemorySavedData) }
-        private val DEF = define(resLoc(DATASYNC_MEMORY_DATA), ::DataSyncMemorySavedData, CODEC)
-
-        @JvmStatic
-        fun get(level: ServerLevel): DataSyncMemorySavedData {
-            return level.loadData(DEF)
-        }
-    }
-}

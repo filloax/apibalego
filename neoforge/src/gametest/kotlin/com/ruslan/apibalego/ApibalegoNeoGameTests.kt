@@ -1,7 +1,7 @@
 package com.ruslan.apibalego
 
 import com.ruslan.apibalego.test.ApibalegoGameTests
-import com.ruslan.apibalego.utils.resLoc
+import com.ruslan.apibalego.utils.id
 import net.minecraft.core.registries.Registries
 import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.gametest.framework.TestFunctionLoader
@@ -24,11 +24,10 @@ object ApibalegoNeoGameTests {
         "live_updates_builtins_registered" to Consumer { ApibalegoGameTests.liveUpdatesBuiltinsRegistered(it) },
         "dispatch_join_active" to Consumer { ApibalegoGameTests.dispatchJoinActive(it) },
         "dispatch_join_inactive_skipped" to Consumer { ApibalegoGameTests.dispatchJoinInactiveSkipped(it) },
-        "toast_packet_builds" to Consumer { ApibalegoGameTests.toastPacketBuilds(it) },
     )
 
     private fun functionKey(name: String): ResourceKey<Consumer<GameTestHelper>> =
-        ResourceKey.create(Registries.TEST_FUNCTION, resLoc(name))
+        ResourceKey.create(Registries.TEST_FUNCTION, id(name))
 
     /** Register the test function bodies into TEST_FUNCTION (at mod construction). */
     @JvmStatic

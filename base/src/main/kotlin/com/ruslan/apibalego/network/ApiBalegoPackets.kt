@@ -3,7 +3,7 @@ package com.ruslan.apibalego.network
 import com.filloax.fxlib.api.FxLibServices
 import com.filloax.fxlib.api.optional
 import com.filloax.fxlib.api.networking.playS2C
-import com.ruslan.apibalego.utils.resLoc
+import com.ruslan.apibalego.utils.id
 import net.minecraft.network.RegistryFriendlyByteBuf
 import net.minecraft.network.chat.Component
 import net.minecraft.network.chat.ComponentSerialization
@@ -17,7 +17,7 @@ typealias RStreamCodec<T> = StreamCodec<RegistryFriendlyByteBuf, T>
 
 object ApiBalegoPackets {
     object Types {
-        val CUSTOM_TOAST = resLoc("custom_toast")
+        val CUSTOM_TOAST = id("custom_toast")
     }
 
     val CUSTOM_TOAST = CustomToastPacket.ENTRY

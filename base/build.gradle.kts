@@ -72,10 +72,16 @@ configurations {
 		isCanBeResolved = false
 		isCanBeConsumed = true
 	}
+	create(COMMON_GAMETEST_JAVA) {
+		isCanBeResolved = false
+		isCanBeConsumed = true
+	}
 }
 
 artifacts {
 	sourceSets.main.get().java.sourceDirectories.forEach { add(COMMON_JAVA, it) }
 	sourceSets.main.get().kotlin.sourceDirectories.forEach { add(COMMON_JAVA, it) }
 	sourceSets.main.get().resources.sourceDirectories.forEach { add(COMMON_RESOURCES, it) }
+	sourceSets["gametest"].java.sourceDirectories.forEach { add(COMMON_GAMETEST_JAVA, it) }
+	sourceSets["gametest"].kotlin.sourceDirectories.forEach { add(COMMON_GAMETEST_JAVA, it) }
 }

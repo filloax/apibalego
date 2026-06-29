@@ -1,0 +1,4 @@
+# Methods
+# FxSavedData (filloaxlib) needs SavedDataStorage#getDataFile; filloaxlib ships this AT in its own
+# jar but it is not applied to apibalego's NeoForge dev/run classpath, so declare it here too.
+public net.minecraft.world.level.storage.SavedDataStorage getDataFile(Lnet/minecraft/resources/Identifier;)Ljava/nio/file/Path;

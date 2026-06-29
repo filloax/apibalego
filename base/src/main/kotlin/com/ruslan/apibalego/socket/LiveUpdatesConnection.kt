@@ -1,7 +1,8 @@
-package com.ruslan.apibalego.http
+package com.ruslan.apibalego.socket
 
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
+import com.ruslan.apibalego.socket.ResponseSender
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.serialization.json.Json

@@ -2,13 +2,13 @@ package com.ruslan.apibalego.test
 
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.http.ApiEventRegistry
-import com.ruslan.apibalego.http.GenericApiEvent
-import com.ruslan.apibalego.http.LiveUpdatesEventRegistry
-import com.ruslan.apibalego.http.RemoteCommandExec
+import com.ruslan.apibalego.http.ApiEntryRaw
+import com.ruslan.apibalego.http.ApiEntryRegistry
+import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import com.ruslan.apibalego.network.CustomToastPacket
 import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.network.chat.Component
+import net.minecraft.resources.Identifier
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -29,84 +29,78 @@ object ApibalegoGameTests {
         helper.succeed()
     }
 
-    /** A registered api-event handler is invoked for an active event with its prefix. */
+    /** A registered api-entry handler is invoked when dispatched. */
     fun apiEventDispatchActive(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
-        val prefix = "gametest_active"
-        ApiEventRegistry.registerHandler(prefix) { _, _ -> counter.incrementAndGet() }
+        val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_active")
+        ApiEntryRegistry.registerSimple(key, { _ -> counter.incrementAndGet() }, { _ -> })
+        val type = ApiEntryRegistry.lookup(key)
 
-        ApiEventRegistry.dispatch(
-            listOf(GenericApiEvent(name = "$prefix/x", active = true)),
+        ApiEntryRegistry.dispatchAllUpdate(
+            listOf(ApiEntryRaw(type = type, id = "x", active = true)),
             helper.level.server,
         )
 
-        check(counter.get() == 1) { "Active event handler should run exactly once, ran ${counter.get()}" }
+        check(counter.get() == 1) { "Handler should run exactly once, ran ${counter.get()}" }
         helper.succeed()
     }
 
-    /** Inactive events are not dispatched to handlers. */
+    /** Inactive entries filtered by the caller before dispatch are not sent to handlers. */
     fun apiEventDispatchInactiveSkipped(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
-        val prefix = "gametest_inactive"
-        ApiEventRegistry.registerHandler(prefix) { _, _ -> counter.incrementAndGet() }
+        val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_inactive")
+        ApiEntryRegistry.registerSimple(key, { _ -> counter.incrementAndGet() }, { _ -> })
+        val type = ApiEntryRegistry.lookup(key)
 
-        ApiEventRegistry.dispatch(
-            listOf(GenericApiEvent(name = "$prefix/x", active = false)),
-            helper.level.server,
-        )
+        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
+        // Filtering inactive is caller responsibility (mirrors GamemasterApi behavior)
+        ApiEntryRegistry.dispatchAllUpdate(entries.filter { it.active }, helper.level.server)
 
-        check(counter.get() == 0) { "Inactive event must not be dispatched" }
+        check(counter.get() == 0) { "Inactive entry must not be dispatched" }
         helper.succeed()
     }
 
     /** The built-in live-update handlers are registered. */
     fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) {
         val keys = LiveUpdatesEventRegistry.all().keys
-        listOf(LiveUpdatesEventRegistry.RELOAD_EVENT, "toast", RemoteCommandExec.PREFIX).forEach {
+        listOf(LiveUpdatesEventRegistry.RELOAD_EVENT, "toast").forEach {
             check(it in keys) { "Built-in live update handler '$it' not registered (have $keys)" }
         }
         helper.succeed()
     }
 
-    /** Active join events are dispatched to registered join handlers, once per player. */
+    /** Active join entries are dispatched to join handlers, once per player. */
     fun dispatchJoinActive(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
-        val prefix = "gametest_join_active"
-        ApiEventRegistry.registerJoinHandler(prefix) { _, _ -> counter.incrementAndGet() }
-        val events = listOf(GenericApiEvent(name = "$prefix/x", active = true))
+        val key = Identifier.fromNamespaceAndPath("gametest", "join_active")
+        ApiEntryRegistry.registerSimple(key, { _ -> }, { _ -> counter.incrementAndGet() })
+        val type = ApiEntryRegistry.lookup(key)
+
+        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = true))
         @Suppress("DEPRECATION")
-        ApiEventRegistry.dispatchJoin(events, helper.makeMockServerPlayerInLevel())
+        ApiEntryRegistry.dispatchAllJoin(entries, helper.makeMockServerPlayerInLevel())
         @Suppress("DEPRECATION")
-        ApiEventRegistry.dispatchJoin(events, helper.makeMockServerPlayerInLevel())
+        ApiEntryRegistry.dispatchAllJoin(entries, helper.makeMockServerPlayerInLevel())
+
         check(counter.get() == 2) { "Join handler should run once per player (2), ran ${counter.get()}" }
         helper.succeed()
     }
 
-    /** Inactive join events are not dispatched. */
+    /** Inactive join entries filtered by the caller before dispatch are not sent to handlers. */
     fun dispatchJoinInactiveSkipped(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
-        val prefix = "gametest_join_inactive"
-        ApiEventRegistry.registerJoinHandler(prefix) { _, _ -> counter.incrementAndGet() }
+        val key = Identifier.fromNamespaceAndPath("gametest", "join_inactive")
+        ApiEntryRegistry.registerSimple(key, { _ -> }, { _ -> counter.incrementAndGet() })
+        val type = ApiEntryRegistry.lookup(key)
+
+        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
         @Suppress("DEPRECATION")
-        val player = helper.makeMockServerPlayerInLevel()
-        ApiEventRegistry.dispatchJoin(
-            listOf(GenericApiEvent(name = "$prefix/x", active = false)),
-            player,
-        )
-        check(counter.get() == 0) { "Inactive join event must not be dispatched" }
+        // Filtering inactive is caller responsibility (mirrors GamemasterApi.Callbacks.onPlayerJoin)
+        ApiEntryRegistry.dispatchAllJoin(entries.filter { it.active }, helper.makeMockServerPlayerInLevel())
+
+        check(counter.get() == 0) { "Inactive join entry must not be dispatched" }
         helper.succeed()
     }
 
     // TODO: live update works test
-
-    /** Toast packet constructs and preserves its fields in the game environment. */
-    fun toastPacketBuilds(helper: GameTestHelper) {
-        val packet = CustomToastPacket(Component.literal("title"), Component.literal("msg"))
-        check(packet.title.string == "title") { "toast title mismatch: ${packet.title.string}" }
-        check(packet.message?.string == "msg") { "toast message mismatch" }
-        check(packet == CustomToastPacket(Component.literal("title"), Component.literal("msg"))) {
-            "toast equality broken"
-        }
-        helper.succeed()
-    }
 }

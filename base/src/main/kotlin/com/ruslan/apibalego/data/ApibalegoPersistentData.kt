@@ -4,8 +4,8 @@ import com.filloax.fxlib.api.codec.mutableSetOf
 import com.filloax.fxlib.api.savedata.FxSavedData
 import com.mojang.serialization.Codec
 import com.mojang.serialization.codecs.RecordCodecBuilder
-import com.ruslan.apibalego.ApiBalegoConstants.CMD_EVENTS_DATA
-import com.ruslan.apibalego.utils.resLoc
+import com.ruslan.apibalego.ApiBalegoConstants.APIBALEGO_PERSISTENT_DATA
+import com.ruslan.apibalego.utils.id
 import net.minecraft.server.MinecraftServer
 
 /**
@@ -13,16 +13,19 @@ import net.minecraft.server.MinecraftServer
  * on every data sync.
  */
 class ApibalegoPersistentData private constructor(
-    alreadyRan: Set<String> = setOf(),
+    alreadyRanCommands: Set<String> = setOf(),
+    lastEndpointOutputs: Map<String, String> = mapOf(),
 ) : FxSavedData<ApibalegoPersistentData>(CODEC) {
-    val alreadyRan: MutableSet<String> = alreadyRan.toMutableSet()
+    val alreadyRanCommands: MutableSet<String> = alreadyRanCommands.toMutableSet()
+    val lastEndpointOutputs: MutableMap<String, String> = lastEndpointOutputs.toMutableMap()
 
     companion object {
         val CODEC: Codec<ApibalegoPersistentData> = RecordCodecBuilder.create { builder -> builder.group(
-            Codec.STRING.mutableSetOf().fieldOf("alreadyRan").forGetter(ApibalegoPersistentData::alreadyRan),
+            Codec.STRING.mutableSetOf().fieldOf("alreadyRan").forGetter(ApibalegoPersistentData::alreadyRanCommands),
+            Codec.unboundedMap(Codec.STRING, Codec.STRING).fieldOf("lastEndpointOutputs").forGetter(ApibalegoPersistentData::lastEndpointOutputs),
         ).apply(builder, ::ApibalegoPersistentData) }
 
-        private val DEF = define(resLoc(CMD_EVENTS_DATA), ::ApibalegoPersistentData, CODEC)
+        private val DEF = define(id(APIBALEGO_PERSISTENT_DATA), ::ApibalegoPersistentData, CODEC)
 
         fun get(server: MinecraftServer): ApibalegoPersistentData {
             return server.loadData(DEF)

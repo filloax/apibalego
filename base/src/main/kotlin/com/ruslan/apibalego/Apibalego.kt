@@ -1,19 +1,20 @@
 package com.ruslan.apibalego
 
+import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.http.ApiEventRegistry
+import com.ruslan.apibalego.handlers.ToastHandler
+import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
-import com.ruslan.apibalego.http.LiveUpdatesEventRegistry
-import com.ruslan.apibalego.http.RemoteCommandExec
-import com.ruslan.apibalego.http.handlers.ToastHandler
+import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.network.ApiBalegoPackets
+import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import com.ruslan.apibalego.utils.ApibalegoLogger
 import net.minecraft.server.level.ServerPlayer
 import org.apache.logging.log4j.LogManager
 
 /**
  * Provides the generic HTTP polling ([DataRemoteSync]), websocket live updates
- * ([com.ruslan.apibalego.http.LiveUpdatesConnection]), config and commands, plus
+ * ([com.ruslan.apibalego.socket.LiveUpdatesConnection]), config and commands, plus
  * registries that let consumer mods plug in their own event handlers.
  */
 abstract class Apibalego {
@@ -25,9 +26,6 @@ abstract class Apibalego {
         val LOGGER = ApibalegoLogger(LogManager.getLogger(MOD_NAME))
 
         var isNeoforge = false      // set to true in ApiBalegoNeo for custom logic
-
-        /** Consumer mods add join-dispatch behavior here (called on every player join). */
-        val onPlayerJoinHooks = mutableListOf<(ServerPlayer) -> Unit>()
 
         private var initialized = false
 
@@ -41,25 +39,26 @@ abstract class Apibalego {
 
             LOGGER.info("Initializing")
 
-            // Built-in api event handlers (consumer mods add their own via ApiEventRegistry)
-            ApiEventRegistry.registerHandler(ToastHandler.PREFIX, ToastHandler::handle)
-            ApiEventRegistry.registerHandler(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandExec)
-            ApiEventRegistry.registerJoinHandler(ToastHandler.PREFIX, ToastHandler::handleJoin)
+            BuiltinApiHandlers.registerAll()
 
             // Built-in live update handlers
             LiveUpdatesEventRegistry.register(LiveUpdatesEventRegistry.RELOAD_EVENT) { _, server, sender ->
                 LOGGER.info("LiveUpdates reload requested, running data sync...")
-                DataRemoteSync.doSync(com.ruslan.apibalego.config.ApiBalegoConfig.dataSyncUrl, server).thenAccept { success ->
+                DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, server).thenAccept { success ->
                     if (success) sender.sendSuccess() else sender.sendFailure()
                 }
             }
             LiveUpdatesEventRegistry.register(ToastHandler.PREFIX, ToastHandler::handleLiveUpdate)
-            LiveUpdatesEventRegistry.register(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandMessage)
+//            LiveUpdatesEventRegistry.register(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandMessage)
+
+            GamemasterApi.init()
 
             ApiBalegoPackets.registerPacketsS2C()
             ApiBalegoPackets.registerPacketsC2S()
 
             ApiBalegoConfigHandler.initConfig()
+
+            ApiBalegoModEvents.get().initCallbacks()
 
             LOGGER.info("Initialized!")
         }

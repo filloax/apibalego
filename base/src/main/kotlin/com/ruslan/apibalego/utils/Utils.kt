@@ -7,7 +7,7 @@ import net.minecraft.resources.Identifier
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.Logger
 
-fun resLoc(str: String): Identifier {
+fun id(str: String): Identifier {
     return Identifier.fromNamespaceAndPath(Apibalego.MOD_ID, str)
 }
 

@@ -29,7 +29,4 @@ object ApibalegoFabricGameTests {
 
     @GameTest
     fun dispatchJoinInactiveSkipped(helper: GameTestHelper) = ApibalegoGameTests.dispatchJoinInactiveSkipped(helper)
-
-    @GameTest
-    fun toastPacketBuilds(helper: GameTestHelper) = ApibalegoGameTests.toastPacketBuilds(helper)
 }

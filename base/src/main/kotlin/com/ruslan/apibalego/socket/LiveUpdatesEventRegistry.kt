@@ -1,6 +1,7 @@
-package com.ruslan.apibalego.http
+package com.ruslan.apibalego.socket
 
 import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.socket.ResponseSender
 import net.minecraft.server.MinecraftServer
 
 fun interface LiveUpdatesEventHandler {

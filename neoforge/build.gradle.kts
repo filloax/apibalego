@@ -31,6 +31,8 @@ val gametest: SourceSet = sourceSets.create("gametest") {
 neoForge {
     version = libs.versions.neoforge.asProvider().get()
 
+//    accessTransformers.files.setFrom(project(BASE_PROJECT).file("src/main/resources/META-INF/accesstransformer.cfg"))
+
     runs {
         create("client") {
             client()
@@ -93,6 +95,10 @@ dependencies {
     utils.getFilloaxlib("neoforge").let{
         implementation(it) { exclude(module = "kotlin-stdlib") }
         jarJar(it)
+        // need this to fix dev runs (aka gametest)
+        // does not work as-is, as it makes it try to load a library as type accesstransformers, which
+        // does not work
+//        accessTransformers(it)
     }
     implementation( libs.kotlinevents )
     jarJar( libs.kotlinevents )

@@ -1,8 +1,8 @@
 package com.ruslan.apibalego
 
-import com.ruslan.apibalego.http.LiveSocket
-import com.ruslan.apibalego.http.LiveUpdatesConnection
-import com.ruslan.apibalego.http.LiveUpdatesEventRegistry
+import com.ruslan.apibalego.socket.LiveSocket
+import com.ruslan.apibalego.socket.LiveUpdatesConnection
+import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
 import net.minecraft.server.MinecraftServer

@@ -1,11 +1,16 @@
-package com.ruslan.apibalego.http
+// Ignore for now, remove comment when unignoring
+
+package com.ruslan.apibalego.handlers
 
 import com.filloax.fxlib.api.EventUtil
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.data.ApibalegoPersistentData
+import com.ruslan.apibalego.http.ApiEntry
+import com.ruslan.apibalego.socket.ResponseSender
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import net.minecraft.core.BlockPos
 import net.minecraft.server.MinecraftServer
 import net.minecraft.util.StringUtil
 import net.minecraft.world.phys.Vec3
@@ -13,15 +18,28 @@ import net.minecraft.world.phys.Vec3
 object RemoteCommandExec {
     const val PREFIX = "cmd"
 
+    /** Entry type for command rows; distinct from the "cmd" event-name [PREFIX]. */
+    const val ENTRY_TYPE = "command"
+
     val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
     }
 
-    /** Handler for "cmd/<id>" gamemaster events polled via [DataRemoteSync]. */
+    /** [ApiEntryMapper] for "command" entries. */
+    fun mapEntry(entry: ApiEntry): GenericApiEvent? {
+        val content = entry.content ?: run {
+            Apibalego.Companion.LOGGER.error("Command entry '${entry.id}' is missing its command (content)")
+            return null
+        }
+        val pos = if (entry.x != null && entry.y != null && entry.z != null) BlockPos(entry.x, entry.y, entry.z) else null
+        return GenericApiEvent("$PREFIX/${entry.id}", entry.active, desc = content, pos = pos, rotation = entry.rotation)
+    }
+
+    /** Handler for "cmd/<id>" gamemaster events polled via [com.ruslan.apibalego.http.DataRemoteSync]. */
     fun handleCommandExec(event: GenericApiEvent, server: MinecraftServer) {
         if (!ApiBalegoConfig.remoteCommandExecution) {
-            Apibalego.LOGGER.warn("Received command event but disabled in config, ignoring! $event")
+            Apibalego.Companion.LOGGER.warn("Received command event but disabled in config, ignoring! $event")
             return
         }
 
@@ -30,16 +48,16 @@ object RemoteCommandExec {
         val pos = event.pos
 
         if (StringUtil.isNullOrEmpty(id)) {
-            Apibalego.LOGGER.error("Command exec must have an id after 'cmd/'! $event")
+            Apibalego.Companion.LOGGER.error("Command exec must have an id after 'cmd/'! $event")
             return
         }
         if (StringUtil.isNullOrEmpty(cmd)) {
-            Apibalego.LOGGER.error("Command exec must have a desc with the command! $event")
+            Apibalego.Companion.LOGGER.error("Command exec must have a desc with the command! $event")
             return
         }
 
         EventUtil.runWhenServerStarted(server, true) { srv ->
-            val savedData = ApibalegoPersistentData.get(srv)
+            val savedData = ApibalegoPersistentData.Companion.get(srv)
             if (savedData.alreadyRan.contains(id)) {
                 return@runWhenServerStarted
             }
@@ -47,18 +65,18 @@ object RemoteCommandExec {
             savedData.alreadyRan.add(id)
             savedData.setDirty()
 
-            Apibalego.LOGGER.info("Executing remote command $cmd")
-            performCommand(cmd!!, server, pos?.let{ Vec3(it.x+0.5, it.y+0.5, it.z+0.5) })
-            Apibalego.LOGGER.info("Executed remote command $cmd")
+            Apibalego.Companion.LOGGER.info("Executing remote command $cmd")
+            performCommand(cmd!!, server, pos?.let{ Vec3(it.x + 0.5, it.y + 0.5, it.z + 0.5) })
+            Apibalego.Companion.LOGGER.info("Executed remote command $cmd")
         }
     }
 
-    /** Handler for the "cmd" websocket live-update event. Matches [LiveUpdatesEventHandler]. */
+    /** Handler for the "cmd" websocket live-update event. Matches [com.ruslan.apibalego.socket.LiveUpdatesEventHandler]. */
     fun handleCommandMessage(message: String, server: MinecraftServer, responseSender: ResponseSender) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Received command message $message")
+        Apibalego.Companion.LOGGER.info("LiveUpdatesConnection | Received command message $message")
 
         if (!ApiBalegoConfig.remoteCommandExecution) {
-            Apibalego.LOGGER.warn("Received command message but disabled in config, ignoring! $message")
+            Apibalego.Companion.LOGGER.warn("Received command message but disabled in config, ignoring! $message")
             responseSender.sendFailure("config_disabled")
             return
         }
@@ -66,7 +84,7 @@ object RemoteCommandExec {
         val remoteCommandDto: RemoteCommandDto = try {
             json.decodeFromString(RemoteCommandDto.serializer(), message)
         } catch (e: Exception) {
-            Apibalego.LOGGER.error("LiveUpdatesConnection | Wrong command format: ${e.message}")
+            Apibalego.Companion.LOGGER.error("LiveUpdatesConnection | Wrong command format: ${e.message}")
             e.printStackTrace()
             responseSender.sendFailure(e.message)
             return
@@ -74,7 +92,7 @@ object RemoteCommandExec {
 
         val success = performCommand(remoteCommandDto.command, server)
 
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Executed command, success: $success")
+        Apibalego.Companion.LOGGER.info("LiveUpdatesConnection | Executed command, success: $success")
         if (success) {
             responseSender.sendSuccess()
         } else {
@@ -94,7 +112,7 @@ object RemoteCommandExec {
             true
         } catch (e: Throwable) {
             e.printStackTrace()
-            Apibalego.LOGGER.error("Failed remote command $command: ${e.message}")
+            Apibalego.Companion.LOGGER.error("Failed remote command $command: ${e.message}")
             false
         }
     }
