@@ -2,6 +2,7 @@ package com.ruslan.apibalego
 
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
+import com.ruslan.apibalego.handlers.RemoteCommandExec
 import com.ruslan.apibalego.handlers.ToastHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
@@ -49,7 +50,7 @@ abstract class Apibalego {
                 }
             }
             LiveUpdatesEventRegistry.register(ToastHandler.PREFIX, ToastHandler::handleLiveUpdate)
-//            LiveUpdatesEventRegistry.register(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandMessage)
+            LiveUpdatesEventRegistry.register(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandMessage)
 
             GamemasterApi.init()
 

@@ -24,6 +24,9 @@ object ApibalegoNeoGameTests {
         "live_updates_builtins_registered" to Consumer { ApibalegoGameTests.liveUpdatesBuiltinsRegistered(it) },
         "dispatch_join_active" to Consumer { ApibalegoGameTests.dispatchJoinActive(it) },
         "dispatch_join_inactive_skipped" to Consumer { ApibalegoGameTests.dispatchJoinInactiveSkipped(it) },
+        "toast_join_marks_as_seen" to Consumer { ApibalegoGameTests.toastJoinMarksAsSeen(it) },
+        "command_dispatch_runs_command" to Consumer { ApibalegoGameTests.commandDispatchRunsCommand(it) },
+        "command_dispatch_idempotent" to Consumer { ApibalegoGameTests.commandDispatchIdempotent(it) },
     )
 
     private fun functionKey(name: String): ResourceKey<Consumer<GameTestHelper>> =

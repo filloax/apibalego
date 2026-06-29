@@ -29,4 +29,13 @@ object ApibalegoFabricGameTests {
 
     @GameTest
     fun dispatchJoinInactiveSkipped(helper: GameTestHelper) = ApibalegoGameTests.dispatchJoinInactiveSkipped(helper)
+
+    @GameTest
+    fun toastJoinMarksAsSeen(helper: GameTestHelper) = ApibalegoGameTests.toastJoinMarksAsSeen(helper)
+
+    @GameTest
+    fun commandDispatchRunsCommand(helper: GameTestHelper) = ApibalegoGameTests.commandDispatchRunsCommand(helper)
+
+    @GameTest
+    fun commandDispatchIdempotent(helper: GameTestHelper) = ApibalegoGameTests.commandDispatchIdempotent(helper)
 }
