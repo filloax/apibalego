@@ -38,4 +38,13 @@ object ApibalegoFabricGameTests {
 
     @GameTest
     fun commandDispatchIdempotent(helper: GameTestHelper) = ApibalegoGameTests.commandDispatchIdempotent(helper)
+
+    @GameTest
+    fun structureHandlerSkipsInactive(helper: GameTestHelper) = ApibalegoGameTests.structureHandlerSkipsInactive(helper)
+
+    @GameTest
+    fun structureHandlerSkipsUnknownStructure(helper: GameTestHelper) = ApibalegoGameTests.structureHandlerSkipsUnknownStructure(helper)
+
+    @GameTest
+    fun structureHandlerRegistersAndClearsStructure(helper: GameTestHelper) = ApibalegoGameTests.structureHandlerRegistersAndClearsStructure(helper)
 }

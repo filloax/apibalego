@@ -5,19 +5,15 @@ import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.data.ApibalegoPersistentData
 import com.ruslan.apibalego.http.ApiEntry
+import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
 import com.ruslan.apibalego.utils.id
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
-import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.phys.Vec3
 
-val ID_API_HANDLER_COMMAND = id("command")
-
-object RemoteCommandExec {
-    const val PREFIX = "cmd"
-
+object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.CommandDetails> {
     val json = Json {
         ignoreUnknownKeys = true
         isLenient = true
@@ -34,34 +30,33 @@ object RemoteCommandExec {
             Vec3(x + 0.5, y + 0.5, z + 0.5) else null
     }
 
-    fun handleApiUpdate(server: MinecraftServer, entry: ApiEntry<CommandDetails>) {
+    override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<CommandDetails>>) {
         if (!ApiBalegoConfig.remoteCommandExecution) {
-            Apibalego.LOGGER.warn("Received command entry but remote execution disabled, ignoring! ${entry.id}")
+            if (entries.isNotEmpty())
+                Apibalego.LOGGER.warn("Received command entries but remote execution disabled, ignoring!")
             return
         }
-
-        val details = entry.details ?: run {
-            Apibalego.LOGGER.error("Command entry '${entry.id}' is missing command details")
-            return
-        }
-        val cmd = details.command.trim()
-        val id = entry.id
 
         EventUtil.runWhenServerStarted(server, true) { srv ->
-            val savedData = ApibalegoPersistentData.get(srv)
-            if (savedData.alreadyRanCommands.contains(id)) return@runWhenServerStarted
+            entries.forEach fe@{ entry ->
+                val details = entry.details ?: run {
+                    Apibalego.LOGGER.error("Command entry '${entry.id}' is missing command details")
+                    return@fe
+                }
+                val cmd = details.command.trim()
+                val id = entry.id
 
-            savedData.alreadyRanCommands.add(id)
-            savedData.setDirty()
+                val savedData = ApibalegoPersistentData.get(srv)
+                if (savedData.alreadyRanCommands.contains(id)) return@runWhenServerStarted
 
-            Apibalego.LOGGER.info("Executing remote command $cmd")
-            performCommand(cmd, server, details.pos())
-            Apibalego.LOGGER.info("Executed remote command $cmd")
+                savedData.alreadyRanCommands.add(id)
+                savedData.setDirty()
+
+                Apibalego.LOGGER.info("Executing remote command $cmd")
+                performCommand(cmd, server, details.pos())
+                Apibalego.LOGGER.info("Executed remote command $cmd")
+            }
         }
-    }
-
-    fun handleApiJoin(player: ServerPlayer, entry: ApiEntry<CommandDetails>) {
-        // Commands are server-wide operations; no per-player action on join
     }
 
     fun handleCommandMessage(message: String, server: MinecraftServer, responseSender: ResponseSender) {

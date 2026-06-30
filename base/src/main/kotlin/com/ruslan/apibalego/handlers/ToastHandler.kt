@@ -9,6 +9,7 @@ import com.filloax.fxlib.api.networking.sendPacket
 import com.ruslan.apibalego.ApiBalegoConstants
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.http.ApiEntry
+import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
 import com.ruslan.apibalego.network.CustomToastPacket
 import kotlinx.serialization.Serializable
@@ -30,9 +31,7 @@ private val json = Json {  }
  * Built-in toast handler. Reacts to "toast/..." gamemaster events (polled and on player join)
  * and to "toast" websocket live-update messages.
  */
-object ToastHandler {
-    const val PREFIX = "toast"
-
+object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
     @Serializable
     data class ToastData(
         @Serializable(with = SimpleComponentSerializer::class)
@@ -49,23 +48,26 @@ object ToastHandler {
         )
     }
 
-    fun handleApiUpdate(server: MinecraftServer, entry: ApiEntry<ToastData>) {
+    override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<ToastData>>) {
         // Avoid doing too soon on init
         val tickCount = server.tickCount
         val minStartTime = 40
-        val toast = entry.details!!
-        val delay = (minStartTime - tickCount).coerceAtLeast(0)
-        if (delay > 0) {
-            ScheduledServerTask.schedule(server, delay) {
+        entries.forEach { entry ->
+            val delay = (minStartTime - tickCount).coerceAtLeast(0)
+            if (delay > 0) {
+                ScheduledServerTask.schedule(server, delay) {
+                    sendAllCustomToastEvent(entry, server)
+                }
+            } else {
                 sendAllCustomToastEvent(entry, server)
             }
-        } else {
-            sendAllCustomToastEvent(entry, server)
         }
     }
 
-    fun handleApiJoin(player: ServerPlayer, entry: ApiEntry<ToastData>) {
-        checkAndSendCustomToastEvent(player, entry.details!!.toPacket(), entry.id)
+    override fun handleApiJoin(player: ServerPlayer, entries: Collection<ApiEntry<ToastData>>) {
+        entries.forEach { entry ->
+            checkAndSendCustomToastEvent(player, entry.details!!.toPacket(), entry.id)
+        }
     }
 
     private fun sendAllCustomToastEvent(entry: ApiEntry<ToastData>, server: MinecraftServer) {

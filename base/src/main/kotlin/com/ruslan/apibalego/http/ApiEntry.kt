@@ -17,12 +17,18 @@ data class ApiEntryRaw(
     val id: String,
     val active: Boolean = true,
 ) {
-    fun <T: Any> toRaw(parsedType: ApiEntryType<T>, parsedDetails: T?) = ApiEntry(
-        parsedType,
-        parsedDetails,
-        id,
-        active
-    )
+    fun <T: Any> resolve(parsedType: ApiEntryType<T>, parsedDetails: T?): ApiEntry<T> {
+        if ((parsedType.detailsDeserializer == null) != (parsedDetails == null)) {
+            throw IllegalArgumentException("Type mismatch: ${parsedType.key} must have details, but details are ${parsedDetails != null}")
+        }
+
+        return ApiEntry(
+            parsedType,
+            parsedDetails,
+            id,
+            active
+        )
+    }
 }
 
 /**

@@ -1,25 +1,32 @@
 package com.ruslan.apibalego.test
 
+import com.filloax.fxlib.api.FxLibServices
 import com.filloax.fxlib.api.entity.getPersistData
 import com.ruslan.apibalego.ApiBalegoConstants
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.handlers.ID_API_HANDLER_COMMAND
-import com.ruslan.apibalego.handlers.RemoteCommandExec
+import com.ruslan.apibalego.handlers.RemoteStructuresHandler
 import com.ruslan.apibalego.handlers.ToastHandler
 import com.ruslan.apibalego.http.ApiEntry
 import com.ruslan.apibalego.http.ApiEntryRaw
 import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.http.ApiEntryType
+import com.ruslan.apibalego.http.ID_API_HANDLER_COMMAND
+import com.ruslan.apibalego.http.ID_API_HANDLER_STRUCTURE
 import com.ruslan.apibalego.http.ID_API_HANDLER_TOAST
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import net.minecraft.core.BlockPos
+import net.minecraft.core.SectionPos
+import net.minecraft.core.registries.Registries
+import net.minecraft.world.level.ChunkPos
 import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.gamerules.GameRules
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.jvm.optionals.getOrNull
 
 /**
  * Loader-agnostic gametest bodies. Each is a `Consumer<GameTestHelper>`-style function that
@@ -29,13 +36,9 @@ import java.util.concurrent.atomic.AtomicInteger
  * Tests are ran in an empty structure as they use the API which isn't related to worldgen.
  */
 object ApibalegoGameTests {
-    private fun check(cond: Boolean, msg: () -> String) {
-        if (!cond) throw AssertionError(msg())
-    }
-
     fun configLoaded(helper: GameTestHelper) {
-        check(ApiBalegoConfigHandler.config != null) { "ApiBalegoConfig was not loaded" }
-        check(ApiBalegoConfig.dataSyncUrl.isNotBlank()) { "dataSyncUrl default missing" }
+        helper.assertTrue(ApiBalegoConfigHandler.config != null, "ApiBalegoConfig was not loaded")
+        helper.assertTrue(ApiBalegoConfig.dataSyncUrl.isNotBlank(), "dataSyncUrl default missing")
         helper.succeed()
     }
 
@@ -43,15 +46,15 @@ object ApibalegoGameTests {
     fun apiEventDispatchActive(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_active")
-        ApiEntryRegistry.registerSimple(key, { _ -> counter.incrementAndGet() }, { _ -> })
+        ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
         val type = ApiEntryRegistry.lookup(key)
 
-        ApiEntryRegistry.dispatchAllUpdate(
+        ApiEntryRegistry.dispatchUpdate(
             listOf(ApiEntryRaw(type = type, id = "x", active = true)),
             helper.level.server,
         )
 
-        check(counter.get() == 1) { "Handler should run exactly once, ran ${counter.get()}" }
+        helper.assertTrue(counter.get() == 1, "Handler should run exactly once, ran ${counter.get()}")
         helper.succeed()
     }
 
@@ -59,22 +62,22 @@ object ApibalegoGameTests {
     fun apiEventDispatchInactiveSkipped(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_inactive")
-        ApiEntryRegistry.registerSimple(key, { _ -> counter.incrementAndGet() }, { _ -> })
+        ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
         val type = ApiEntryRegistry.lookup(key)
 
         val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
         // Filtering inactive is caller responsibility (mirrors GamemasterApi behavior)
-        ApiEntryRegistry.dispatchAllUpdate(entries.filter { it.active }, helper.level.server)
+        ApiEntryRegistry.dispatchUpdate(entries.filter { it.active }, helper.level.server)
 
-        check(counter.get() == 0) { "Inactive entry must not be dispatched" }
+        helper.assertTrue(counter.get() == 0, "Inactive entry must not be dispatched")
         helper.succeed()
     }
 
     /** The built-in live-update handlers are registered. */
     fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) {
         val keys = LiveUpdatesEventRegistry.all().keys
-        listOf(LiveUpdatesEventRegistry.RELOAD_EVENT, "toast", RemoteCommandExec.PREFIX).forEach {
-            check(it in keys) { "Built-in live update handler '$it' not registered (have $keys)" }
+        listOf(LiveUpdatesEventRegistry.RELOAD_EVENT, "toast", "cmd").forEach {
+            helper.assertTrue(it in keys, "Built-in live update handler '$it' not registered (have $keys)")
         }
         helper.succeed()
     }
@@ -83,16 +86,16 @@ object ApibalegoGameTests {
     fun dispatchJoinActive(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "join_active")
-        ApiEntryRegistry.registerSimple(key, { _ -> }, { _ -> counter.incrementAndGet() })
+        ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
         val type = ApiEntryRegistry.lookup(key)
 
         val entries = listOf(ApiEntryRaw(type = type, id = "x", active = true))
         @Suppress("DEPRECATION")
-        ApiEntryRegistry.dispatchAllJoin(entries, helper.makeMockServerPlayerInLevel())
+        ApiEntryRegistry.dispatchJoin(entries, helper.makeMockServerPlayerInLevelAlt())
         @Suppress("DEPRECATION")
-        ApiEntryRegistry.dispatchAllJoin(entries, helper.makeMockServerPlayerInLevel())
+        ApiEntryRegistry.dispatchJoin(entries, helper.makeMockServerPlayerInLevelAlt())
 
-        check(counter.get() == 2) { "Join handler should run once per player (2), ran ${counter.get()}" }
+        helper.assertTrue(counter.get() == 2, "Join handler should run once per player (2), ran ${counter.get()}")
         helper.succeed()
     }
 
@@ -100,15 +103,15 @@ object ApibalegoGameTests {
     fun dispatchJoinInactiveSkipped(helper: GameTestHelper) {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "join_inactive")
-        ApiEntryRegistry.registerSimple(key, { _ -> }, { _ -> counter.incrementAndGet() })
+        ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
         val type = ApiEntryRegistry.lookup(key)
 
         val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
         @Suppress("DEPRECATION")
         // Filtering inactive is caller responsibility (mirrors GamemasterApi.Callbacks.onPlayerJoin)
-        ApiEntryRegistry.dispatchAllJoin(entries.filter { it.active }, helper.makeMockServerPlayerInLevel())
+        ApiEntryRegistry.dispatchJoin(entries.filter { it.active }, helper.makeMockServerPlayerInLevelAlt())
 
-        check(counter.get() == 0) { "Inactive join entry must not be dispatched" }
+        helper.assertTrue(counter.get() == 0, "Inactive join entry must not be dispatched")
         helper.succeed()
     }
 
@@ -117,7 +120,7 @@ object ApibalegoGameTests {
     /** Toast join handler marks the entry id as seen in player persistent data. */
     fun toastJoinMarksAsSeen(helper: GameTestHelper) {
         @Suppress("DEPRECATION")
-        val player = helper.makeMockServerPlayerInLevel()
+        val player = helper.makeMockServerPlayerInLevelAlt()
         val entryId = "gt-toast-seen-${System.nanoTime()}"
         val toast = ToastHandler.ToastData(title = Component.literal("Test Toast"))
         @Suppress("UNCHECKED_CAST")
@@ -130,11 +133,11 @@ object ApibalegoGameTests {
             active = true,
         )
 
-        ToastHandler.handleApiJoin(player, entry)
+        ToastHandler.handleApiJoin(player, listOf(entry))
 
         val memory = player.getPersistData().getCompound(ApiBalegoConstants.CUSTOM_TOAST_MEMORY).get()
         val key = toast.title.string + entryId
-        check(memory.contains(key)) { "toast entry not marked as seen in player memory" }
+        helper.assertTrue(memory.contains(key), "toast entry not marked as seen in player memory")
         helper.succeed()
     }
 
@@ -143,24 +146,147 @@ object ApibalegoGameTests {
         val server = helper.level.server
         val prevEnabled = ApiBalegoConfig.remoteCommandExecution
         ApiBalegoConfig.remoteCommandExecution = true
-        try {
-            ApiEntryRegistry.dispatchAllUpdate(
-                listOf(ApiEntryRaw(
-                    type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
-                    details = buildJsonObject { put("command", JsonPrimitive("gamerule keepInventory true")) },
-                    id = "gt-cmd-run-${System.nanoTime()}",
-                    active = true,
-                )),
-                server,
-            )
-            check(helper.level.gameRules.get(GameRules.KEEP_INVENTORY) == true) {
-                "command did not run (keepInventory not set to true)"
+        ApiEntryRegistry.dispatchUpdate(
+            listOf(ApiEntryRaw(
+                type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
+                details = buildJsonObject { put("command", JsonPrimitive("gamerule keep_inventory true")) },
+                id = "gt-cmd-run-${System.nanoTime()}",
+                active = true,
+            )),
+            server,
+        )
+        // EventUtil.runWhenServerStarted fires on the next tick in gametests
+        helper.runAfterDelay(1) {
+            try {
+                helper.assertTrue(
+                    helper.level.gameRules.get(GameRules.KEEP_INVENTORY),
+                    "command did not run (keepInventory not set to true)",
+                )
+                helper.succeed()
+            } finally {
+                server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule keep_inventory false")
+                ApiBalegoConfig.remoteCommandExecution = prevEnabled
             }
-        } finally {
-            server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule keepInventory false")
-            ApiBalegoConfig.remoteCommandExecution = prevEnabled
         }
-        helper.succeed()
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private fun makeStructureEntry(
+        id: String,
+        structureId: Identifier,
+        pos: BlockPos = BlockPos.ZERO,
+        active: Boolean = true,
+    ) = ApiEntry(
+        type = ApiEntryRegistry.lookup(ID_API_HANDLER_STRUCTURE)
+            as ApiEntryType<RemoteStructuresHandler.RemoteStructureSpawnData>,
+        details = RemoteStructuresHandler.RemoteStructureSpawnData(structureId, pos),
+        id = id,
+        active = active,
+    )
+
+    /** Inactive structure entries are not added to the spawn map. */
+    fun structureHandlerSkipsInactive(helper: GameTestHelper) {
+        val bogusId = Identifier.fromNamespaceAndPath("gametest", "nope_inactive")
+        val entryId = "gt-struct-inactive-${System.nanoTime()}"
+        val spawnKey = "apibalego_structure_$entryId"
+        RemoteStructuresHandler.handleApiUpdate(
+            helper.level.server,
+            listOf(makeStructureEntry(entryId, bogusId, active = false)),
+        )
+        // Tests run concurrently — check for the specific key, not isEmpty()
+        helper.runAfterDelay(1) {
+            helper.assertFalse(
+                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
+                "Inactive structure entry must not be added to map",
+            )
+            helper.succeed()
+        }
+    }
+
+    /** Active entries referencing a non-existent structure ID are skipped without crashing. */
+    fun structureHandlerSkipsUnknownStructure(helper: GameTestHelper) {
+        val bogusId = Identifier.fromNamespaceAndPath("gametest", "nonexistent_structure")
+        val entryId = "gt-struct-unknown-${System.nanoTime()}"
+        val spawnKey = "apibalego_structure_$entryId"
+        RemoteStructuresHandler.handleApiUpdate(
+            helper.level.server,
+            listOf(makeStructureEntry(entryId, bogusId)),
+        )
+        // Tests run concurrently — check for the specific key, not isEmpty()
+        helper.runAfterDelay(1) {
+            helper.assertFalse(
+                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
+                "Non-existent structure must be silently skipped",
+            )
+            helper.succeed()
+        }
+    }
+
+    /**
+     * A valid structure entry populates the handler map, hands off to FxLib's queue, and
+     * the structure appears in the vanilla StructureManager (via FxLib's mixin). A subsequent
+     * empty re-dispatch clears the map.
+     *
+     * FxLib has two async hops before placement: [EventUtil.runWhenServerStarted] (1 tick) then
+     * [ScheduledServerTask] (1 more tick). Sync checks use [GameTestHelper.runAfterDelay];
+     * world-placement polling uses [GameTestHelper.succeedWhen] via [StructureManager.startsForStructure].
+     *
+     * Clear check lives inside the [succeedWhen] block: the first pass where the world check passes
+     * dispatches the clear (async); the re-run one tick later sees the cleared map and succeeds.
+     */
+    fun structureHandlerRegistersAndClearsStructure(helper: GameTestHelper) {
+        val server = helper.level.server
+        val validStructId = Identifier.fromNamespaceAndPath("minecraft", "igloo")
+        val entryId = "gt-struct-valid-${System.nanoTime()}"
+        // Spawn at the test's own world position so the placement is tied to this test's region
+        // rather than a fixed global coord (BlockPos.ZERO) that persists across runs.
+        val spawnPos = helper.absolutePos(BlockPos(2, 0, 2))
+        val spawnChunk = ChunkPos(
+            SectionPos.blockToSectionCoord(spawnPos.x),
+            SectionPos.blockToSectionCoord(spawnPos.z),
+        )
+
+        val structure = server.registryAccess()
+            .lookup(Registries.STRUCTURE).getOrNull()
+            ?.getValue(validStructId)
+
+        RemoteStructuresHandler.handleApiUpdate(
+            server,
+            listOf(makeStructureEntry(entryId, validStructId, spawnPos)),
+        )
+
+        val spawnKey = "apibalego_structure_$entryId"
+        // runWhenServerStarted now does more work (chunk lookup + ScheduledServerTask), so
+        // give it 2 ticks instead of 1 to guarantee it completes before checking the maps.
+        helper.runAfterDelay(2) {
+            helper.assertTrue(
+                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
+                "Valid structure '$validStructId' must be in handler spawn map after dispatch",
+            )
+            helper.assertTrue(
+                FxLibServices.fixedStructureGeneration.registeredStructureSpawns.containsKey(spawnKey),
+                "Handler must call fixedStructureGeneration.register() — spawnKey '$spawnKey' not in FxLib queue",
+            )
+
+            // Verify placement via vanilla StructureManager routed through FxLib's mixin.
+            // startsForStructure(ChunkPos, Predicate) checks at chunk granularity so the igloo
+            // doesn't need to overlap spawnPos exactly (igloo doesn't implement FixablePosition).
+            // Clear check is also here: first retry after the world check passes dispatches the
+            // clear (async); the next retry sees the empty map and all assertions pass.
+            helper.succeedWhen {
+                val starts = helper.level.structureManager().startsForStructure(spawnChunk) { it == structure }
+                helper.assertTrue(
+                    structure != null && starts.isNotEmpty(),
+                    "Structure '$validStructId' not found via vanilla StructureManager in chunk $spawnChunk",
+                )
+                RemoteStructuresHandler.handleApiUpdate(server, emptyList())
+                // Tests run concurrently — check our specific key was cleared, not isEmpty()
+                helper.assertFalse(
+                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
+                    "Spawn map must not contain entry after re-dispatch with no entries",
+                )
+            }
+        }
     }
 
     /** Command entry with the same id is not executed more than once. */
@@ -168,33 +294,43 @@ object ApibalegoGameTests {
         val server = helper.level.server
         val prevEnabled = ApiBalegoConfig.remoteCommandExecution
         ApiBalegoConfig.remoteCommandExecution = true
-        try {
-            val entryId = "gt-cmd-idem-${System.nanoTime()}"
-            val entry = ApiEntryRaw(
-                type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
-                details = buildJsonObject { put("command", JsonPrimitive("gamerule keepInventory true")) },
-                id = entryId,
-                active = true,
+        val entryId = "gt-cmd-idem-${System.nanoTime()}"
+        // Use send_command_feedback (default true) to avoid clashing with commandDispatchRunsCommand's keep_inventory
+        val entry = ApiEntryRaw(
+            type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
+            details = buildJsonObject { put("command", JsonPrimitive("gamerule send_command_feedback false")) },
+            id = entryId,
+            active = true,
+        )
+
+        ApiEntryRegistry.dispatchUpdate(listOf(entry), server)
+
+        helper.runAfterDelay(1) {
+            helper.assertFalse(
+                helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                "first dispatch should set send_command_feedback false",
             )
 
-            ApiEntryRegistry.dispatchAllUpdate(listOf(entry), server)
-            check(helper.level.gameRules.get(GameRules.KEEP_INVENTORY) == true) {
-                "first dispatch should set keepInventory true"
-            }
+            server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
+            helper.assertTrue(
+                helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                "manual reset to true failed",
+            )
 
-            server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule keepInventory false")
-            check(helper.level.gameRules.get(GameRules.KEEP_INVENTORY) == false) {
-                "manual reset to false failed"
+            ApiEntryRegistry.dispatchUpdate(listOf(entry), server)
+            // wait another tick for the second dispatch's runWhenServerStarted callback
+            helper.runAfterDelay(1) {
+                try {
+                    helper.assertTrue(
+                        helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                        "second dispatch with same id must be skipped (idempotent)",
+                    )
+                    helper.succeed()
+                } finally {
+                    server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
+                    ApiBalegoConfig.remoteCommandExecution = prevEnabled
+                }
             }
-
-            ApiEntryRegistry.dispatchAllUpdate(listOf(entry), server)
-            check(helper.level.gameRules.get(GameRules.KEEP_INVENTORY) == false) {
-                "second dispatch with same id must be skipped (idempotent)"
-            }
-        } finally {
-            server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule keepInventory false")
-            ApiBalegoConfig.remoteCommandExecution = prevEnabled
         }
-        helper.succeed()
     }
 }

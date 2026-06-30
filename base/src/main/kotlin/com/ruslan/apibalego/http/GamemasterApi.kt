@@ -24,7 +24,7 @@ object GamemasterApi {
 
     object Callbacks {
         fun onPlayerJoin(player: ServerPlayer) {
-            ApiEntryRegistry.dispatchAllJoin(activeEntries, player)
+            ApiEntryRegistry.dispatchJoin(activeEntries, player)
         }
 
         fun onServerStop() {
@@ -45,7 +45,7 @@ object GamemasterApi {
         activeEntries.clear()
         activeEntries.addAll(currentlyActive)
 
-        ApiEntryRegistry.dispatchAllUpdate(currentlyActive, server)
+        ApiEntryRegistry.dispatchUpdate(currentlyActive, server)
     }
 
     private fun reset() {

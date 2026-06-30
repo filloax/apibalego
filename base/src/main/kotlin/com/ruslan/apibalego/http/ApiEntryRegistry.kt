@@ -20,20 +20,27 @@ class ApiEntryType<T : Any> internal constructor(
     val key: Identifier,
     // if null, type has no extra info
     val detailsDeserializer: KSerializer<T>?,
-    val updateHandler: (MinecraftServer, ApiEntry<T>) -> Unit,
-    val joinHandler: (ServerPlayer, ApiEntry<T>) -> Unit,
+    val handler: ApiEntryHandler<T>,
 ) {
-    fun dispatchUpdate(raw: ApiEntryRaw, server: MinecraftServer) {
-        updateHandler.invoke(server, raw.toRaw(this, parseDetails(raw)))
+    fun dispatchUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
+        handler.handleApiUpdate(server, entries.map { it.resolve(this, parseDetails(it)) })
     }
 
-    fun dispatchJoin(raw: ApiEntryRaw, player: ServerPlayer) {
-        joinHandler.invoke(player, raw.toRaw(this, parseDetails(raw)))
+    fun dispatchJoin(entries: Collection<ApiEntryRaw>, player: ServerPlayer) {
+        handler.handleApiJoin(player, entries.map { it.resolve(this, parseDetails(it)) })
     }
 
     private fun parseDetails(raw: ApiEntryRaw) = detailsDeserializer?.let { deserializer ->
         raw.details?.takeIf { it != JsonNull }
             ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
+    }
+}
+
+interface ApiEntryHandler<T : Any> {
+    fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<T>>)
+
+    fun handleApiJoin(player: ServerPlayer, entries: Collection<ApiEntry<T>>) {
+        // do nothing on join by default
     }
 }
 
@@ -44,39 +51,43 @@ object ApiEntryRegistry {
         key: Identifier,
         // if null, type has no extra info
         detailsDeserializer: KSerializer<T>?,
-        updateHandler: (MinecraftServer, ApiEntry<T>) -> Unit,
-        joinHandler: (ServerPlayer, ApiEntry<T>) -> Unit,
+        handler: ApiEntryHandler<T>,
     ) {
-        registry[key] = ApiEntryType(key, detailsDeserializer, updateHandler, joinHandler)
+        registry[key] = ApiEntryType(key, detailsDeserializer, handler)
     }
 
     fun registerSimple(
         key: Identifier,
-        updateHandler: (MinecraftServer) -> Unit,
-        joinHandler: (ServerPlayer) -> Unit,
+        updateHandler: (MinecraftServer, Collection<ApiEntry<Nothing>>) -> Unit,
+        joinHandler: ((ServerPlayer, Collection<ApiEntry<Nothing>>) -> Unit)? = null,
     ) {
-        registry[key] = ApiEntryType<Nothing>(key, null,
-            { server, _ -> updateHandler(server) },
-            { player, _ -> joinHandler(player) }
-        )
+        val handler = object : ApiEntryHandler<Nothing> {
+            override fun handleApiUpdate(
+                server: MinecraftServer,
+                entries: Collection<ApiEntry<Nothing>>
+            ) {
+                updateHandler(server, entries)
+            }
+
+            override fun handleApiJoin(player: ServerPlayer, entries: Collection<ApiEntry<Nothing>>) {
+                joinHandler?.invoke(player, entries)
+            }
+        }
+        registry[key] = ApiEntryType(key, null, handler)
     }
 
     fun lookup(key: Identifier) = registry[key] ?: throw UnknownApiEntryTypeException(key)
 
-    fun dispatchUpdate(raw: ApiEntryRaw, server: MinecraftServer) {
-        raw.type.dispatchUpdate(raw, server)
+    fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
+        all.groupBy { it.type }.forEach { (type, entries) ->
+            type.dispatchUpdate(entries, server)
+        }
     }
 
-    fun dispatchAllUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
-        all.forEach { dispatchUpdate(it, server) }
-    }
-
-    fun dispatchJoin(raw: ApiEntryRaw, player: ServerPlayer) {
-        raw.type.dispatchJoin(raw, player)
-    }
-
-    fun dispatchAllJoin(all: Collection<ApiEntryRaw>, player: ServerPlayer) {
-        all.forEach { dispatchJoin(it, player) }
+    fun dispatchJoin(all: Collection<ApiEntryRaw>, player: ServerPlayer) {
+        all.groupBy { it.type }.forEach { (type, entries) ->
+            type.dispatchJoin(entries, player)
+        }
     }
 }
 

@@ -2,7 +2,7 @@ package com.ruslan.apibalego
 
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.handlers.RemoteCommandExec
+import com.ruslan.apibalego.handlers.RemoteCommandExecHandler
 import com.ruslan.apibalego.handlers.ToastHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
@@ -10,7 +10,6 @@ import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.network.ApiBalegoPackets
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import com.ruslan.apibalego.utils.ApibalegoLogger
-import net.minecraft.server.level.ServerPlayer
 import org.apache.logging.log4j.LogManager
 
 /**
@@ -49,8 +48,8 @@ abstract class Apibalego {
                     if (success) sender.sendSuccess() else sender.sendFailure()
                 }
             }
-            LiveUpdatesEventRegistry.register(ToastHandler.PREFIX, ToastHandler::handleLiveUpdate)
-            LiveUpdatesEventRegistry.register(RemoteCommandExec.PREFIX, RemoteCommandExec::handleCommandMessage)
+            LiveUpdatesEventRegistry.register("toast", ToastHandler::handleLiveUpdate)
+            LiveUpdatesEventRegistry.register("cmd", RemoteCommandExecHandler::handleCommandMessage)
 
             GamemasterApi.init()
 
