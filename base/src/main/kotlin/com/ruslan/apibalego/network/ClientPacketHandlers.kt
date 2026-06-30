@@ -5,6 +5,6 @@ import com.ruslan.apibalego.client.gui.components.updateCustomToast
 
 object ClientPacketHandlers {
     fun handleCustomToast(packet: CustomToastPacket, context: ToClientContext) {
-        context.client.toastManager.updateCustomToast(packet.title, packet.message, packet.item)
+        context.client.gui.toastManager().updateCustomToast(packet.title, packet.message, packet.item)
     }
 }

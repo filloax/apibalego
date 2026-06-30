@@ -2,22 +2,22 @@
     java = "25"
 
 # General dependencies
-    minecraft-range = "26.1.2"
-    minecraft-range-fabric = "26.1.2"
-    minecraft = "26.1.2"
+    minecraft-range = "26.2"
+    minecraft-range-fabric = ">=26.2"
+    minecraft = "26.2"
     # Get versions from https://parchmentmc.org/docs/getting-started
-    #parchment-minecraft = "26.1-snapshot-1"
+    #parchment-minecraft = "26.2-snapshot-1"
     #parchment = "2025.12.20"
     # Get versions from https://projects.neoforged.net/neoforged/neoform
-    neoform = "26.1.2-1" # vanilla neoforge configuration
+    neoform = "26.2-1" # vanilla neoforge configuration
 
 # Mod dependencies
-    filloaxlib = "0.37.2-26.1"
+    filloaxlib = "0.38.0-26.2"
     modmenu = "18.0.0-beta.1"
-    rconfig = "4.0.1"
-    rconfigMc = "26.1"
+    rconfig = "5.0.0"
+    rconfigMc = "26.2"
 
-# Mod compatibility dependencies (todo: re-enabled if needed after 26.1 transition)
+# Mod compatibility dependencies (todo: re-enabled if needed after 26.2 transition)
     lithostitched-neoforge = "1.7.9-neoforge-26.1"
     lithostitched-fabric = "1.7.9-fabric-26.1"
     cobblemon = "1.7.1+1.21.1"
@@ -32,7 +32,7 @@
     endremastered-neoforge = "aqYxfNAS"
 
 # Kotlin
-    kotlin = "2.3.21"
+    kotlin = "2.4.0"
     kotlin-serialization = "1.9.0"
     kotlin-datetime = "0.7.1"
 
@@ -40,14 +40,14 @@
     # Get versions from https://github.com/FabricMC/fabric-loader/releases
     fabric = "0.18.6"
     # Get versions from https://modrinth.com/mod/fabric-api/versions
-    fabric-api = "0.149.1+26.1.2"
-    fabric-language-kotlin = "1.13.11+kotlin.2.3.21"
+    fabric-api = "0.153.0+26.2"
+    fabric-language-kotlin = "1.13.12+kotlin.2.4.0"
 
 # Neoforge Settings
     # Get versions from https://projects.neoforged.net/neoforged/neoforge
-    neoforge = "26.1.2.71"
-    neoforge-range = "[26.1.2.71,26.2)"
-    kotlinforge = "6.2.0"
+    neoforge = "26.2.0.7-beta"
+    neoforge-range = "[26.2.0.7-beta,26.3)"
+    kotlinforge = "6.3.0"
     kotlinforge-range = "[6.2.0,)"
 
 # Other dependencies
