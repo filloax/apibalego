@@ -1,4 +1,4 @@
 - [x] ApiEventRegistry.dispatchJoin is not called
-- [ ] Port structures
-- [ ] Rework API: event with type and T details depending on type
-- [ ] Move our player join hooks etc to be manually called by ApiBalego.kt
+- [x] Port structures
+- [x] Rework API: event with type and T details depending on type
+- [x] Move our player join hooks etc to be manually called by ApiBalego.kt
