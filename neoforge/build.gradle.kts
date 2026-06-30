@@ -3,7 +3,7 @@ import com.ruslan.gradle.*
 plugins {
     // see buildSrc
     id("com.ruslan.gradle.multiloader-loader")
-    id("com.ruslan.gradle.multiloader-gametest-loader")
+    // id("com.ruslan.gradle.multiloader-gametest-loader")  // disabled: neoforge gametests don't work
 
     alias(libs.plugins.moddevgradle)
 }
@@ -22,11 +22,10 @@ version = "$modVersion-$minecraftVersion$versionSuffix-neoforge"
 
 if (includeDeps) println("Including dependencies for test mode")
 
-// Game tests live in their own source set so they are never part of the released jar
-val gametest: SourceSet = sourceSets.create("gametest") {
-    compileClasspath += sourceSets.main.get().compileClasspath + sourceSets.main.get().output
-    runtimeClasspath += sourceSets.main.get().runtimeClasspath + sourceSets.main.get().output
-}
+// val gametest: SourceSet = sourceSets.create("gametest") {
+//     compileClasspath += sourceSets.main.get().compileClasspath + sourceSets.main.get().output
+//     runtimeClasspath += sourceSets.main.get().runtimeClasspath + sourceSets.main.get().output
+// }
 
 neoForge {
     version = libs.versions.neoforge.asProvider().get()
@@ -44,10 +43,10 @@ neoForge {
             ideName = "APIBalego - NeoForge Server"
         }
 
-        create("gameTestServer") {
-            type = "gameTestServer"
-            ideName = "APIBalego - Game Test Server"
-        }
+        // create("gameTestServer") {
+        //     type = "gameTestServer"
+        //     ideName = "APIBalego - Game Test Server"
+        // }
 
         configureEach {
             systemProperty("forge.logging.markers", "REGISTRIES")
@@ -60,23 +59,23 @@ neoForge {
     mods {
         register(modid) {
             sourceSet(sourceSets.main.get())
-            sourceSet(sourceSets["gametest"])
+            // sourceSet(sourceSets["gametest"])
         }
     }
 }
 
-configurations {
-    create(COMMON_GAMETEST_RESOURCES) { isCanBeResolved = true }
-}
+// configurations {
+//     create(COMMON_GAMETEST_RESOURCES) { isCanBeResolved = true }
+// }
 
-tasks.named<ProcessResources>("processGametestResources") {
-    dependsOn(configurations.getByName(COMMON_GAMETEST_RESOURCES))
-    from(configurations.getByName(COMMON_GAMETEST_RESOURCES))
-}
+// tasks.named<ProcessResources>("processGametestResources") {
+//     dependsOn(configurations.getByName(COMMON_GAMETEST_RESOURCES))
+//     from(configurations.getByName(COMMON_GAMETEST_RESOURCES))
+// }
 
 dependencies {
     implementation( libs.jsr305 )
-    COMMON_GAMETEST_RESOURCES(project(path = BASE_PROJECT, configuration = COMMON_GAMETEST_RESOURCES))
+    // COMMON_GAMETEST_RESOURCES(project(path = BASE_PROJECT, configuration = COMMON_GAMETEST_RESOURCES))
 
     socketIoLibs.forEach {
         implementation(it)
