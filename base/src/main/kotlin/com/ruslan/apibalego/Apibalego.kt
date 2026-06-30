@@ -1,14 +1,11 @@
 package com.ruslan.apibalego
 
-import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.handlers.RemoteCommandExecHandler
-import com.ruslan.apibalego.handlers.ToastHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
 import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.network.ApiBalegoPackets
-import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
+import com.ruslan.apibalego.socket.BuiltinLiveUpdateEvents
 import com.ruslan.apibalego.utils.ApibalegoLogger
 import org.apache.logging.log4j.LogManager
 
@@ -40,16 +37,7 @@ abstract class Apibalego {
             LOGGER.info("Initializing")
 
             BuiltinApiHandlers.registerAll()
-
-            // Built-in live update handlers
-            LiveUpdatesEventRegistry.register(LiveUpdatesEventRegistry.RELOAD_EVENT) { _, server, sender ->
-                LOGGER.info("LiveUpdates reload requested, running data sync...")
-                DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, server).thenAccept { success ->
-                    if (success) sender.sendSuccess() else sender.sendFailure()
-                }
-            }
-            LiveUpdatesEventRegistry.register("toast", ToastHandler::handleLiveUpdate)
-            LiveUpdatesEventRegistry.register("cmd", RemoteCommandExecHandler::handleCommandMessage)
+            BuiltinLiveUpdateEvents.registerAll()
 
             GamemasterApi.init()
 

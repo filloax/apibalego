@@ -2,7 +2,6 @@ package com.ruslan.apibalego.socket
 
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
-import com.ruslan.apibalego.socket.ResponseSender
 import io.socket.client.IO
 import io.socket.client.Socket
 import kotlinx.serialization.json.Json
@@ -186,12 +185,12 @@ class LiveUpdatesConnection internal constructor(
      */
     internal fun bindHandlers(socket: LiveSocket) {
         val server = this.server ?: error("Cannot bind live update handlers without a server")
-        LiveUpdatesEventRegistry.all().forEach { (eventType, handler) ->
-            socket.on(eventType) { message ->
+        LiveUpdatesEventRegistry.all().forEach { (eventName, event) ->
+            socket.on(eventName) { message ->
                 try {
-                    handler.handle(message, server, this)
+                    event.dispatch(message, server, this)
                 } catch (e: Exception) {
-                    logError("Error handling live update '$eventType': ${e.stackTraceToString()}")
+                    logError("Error handling live update '$eventName': ${e.stackTraceToString()}")
                     sendFailure(e.message)
                 }
             }

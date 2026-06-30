@@ -9,16 +9,10 @@ import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
 import com.ruslan.apibalego.utils.id
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.phys.Vec3
 
 object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.CommandDetails> {
-    val json = Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
     @Serializable
     data class CommandDetails(
         val command: String,
@@ -59,21 +53,12 @@ object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.Comma
         }
     }
 
-    fun handleCommandMessage(message: String, server: MinecraftServer, responseSender: ResponseSender) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Received command message $message")
+    fun handleCommandMessage(dto: LiveCommandDto, server: MinecraftServer, responseSender: ResponseSender) {
+        Apibalego.LOGGER.info("LiveUpdatesConnection | Received command message ${dto.command}")
 
         if (!ApiBalegoConfig.remoteCommandExecution) {
-            Apibalego.LOGGER.warn("Received command message but remote execution disabled, ignoring! $message")
+            Apibalego.LOGGER.warn("Received command message but remote execution disabled, ignoring! ${dto.command}")
             responseSender.sendFailure("config_disabled")
-            return
-        }
-
-        val dto: LiveCommandDto = try {
-            json.decodeFromString(LiveCommandDto.serializer(), message)
-        } catch (e: Exception) {
-            Apibalego.LOGGER.error("LiveUpdatesConnection | Wrong command format: ${e.message}")
-            e.printStackTrace()
-            responseSender.sendFailure(e.message)
             return
         }
 
@@ -97,5 +82,5 @@ object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.Comma
     }
 
     @Serializable
-    private data class LiveCommandDto(val command: String)
+    data class LiveCommandDto(val command: String)
 }

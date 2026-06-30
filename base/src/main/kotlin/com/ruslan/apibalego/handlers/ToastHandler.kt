@@ -13,7 +13,6 @@ import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
 import com.ruslan.apibalego.network.CustomToastPacket
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.nbt.IntTag
 import net.minecraft.network.PacketSendListener
@@ -24,8 +23,6 @@ import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.item.Item
 import net.minecraft.world.item.ItemStack
 
-// temp
-private val json = Json {  }
 
 /**
  * Built-in toast handler. Reacts to "toast/..." gamemaster events (polled and on player join)
@@ -90,18 +87,9 @@ object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
 
     // live
 
-    fun handleLiveUpdate(message: String, server: MinecraftServer, sender: ResponseSender) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Received toast message $message")
-        val toastData: ToastData = try {
-            json.decodeFromString(message)
-        } catch (e: Exception) {
-            Apibalego.LOGGER.error("LiveUpdatesConnection | Wrong toast format: ${e.message}")
-            e.printStackTrace()
-            sender.sendFailure(e.message)
-            return
-        }
-
-        val packet = toastData.toPacket()
+    fun handleLiveUpdate(data: ToastData, server: MinecraftServer, sender: ResponseSender) {
+        Apibalego.LOGGER.info("LiveUpdatesConnection | Received toast")
+        val packet = data.toPacket()
         server.playerList.players.forEach { player ->
             player.sendPacket(packet) { future ->
                 if (future.isSuccess) sender.sendSuccess() else sender.sendFailure()

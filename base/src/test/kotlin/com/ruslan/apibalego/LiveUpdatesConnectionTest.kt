@@ -5,6 +5,7 @@ import com.ruslan.apibalego.socket.LiveUpdatesConnection
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import io.socket.client.Socket
 import io.socket.emitter.Emitter
+import kotlinx.serialization.Serializable
 import net.minecraft.server.MinecraftServer
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -18,6 +19,9 @@ import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.TimeUnit
+
+@Serializable
+private data class TestMsg(val v: String)
 
 /**
  * Drives [LiveUpdatesConnection] against a fake/mocked [LiveSocket] — socket.io mocked
@@ -67,9 +71,9 @@ class LiveUpdatesConnectionTest {
         val eventName = "test-dispatch-${System.nanoTime()}"
         val received = mutableListOf<String>()
 
-        LiveUpdatesEventRegistry.register(eventName) { msg, _, _ -> received.add(msg) }
+        LiveUpdatesEventRegistry.register(eventName, TestMsg.serializer()) { data, _, _ -> received.add(data.v) }
         conn.bindHandlers(socket)
-        socket.listeners[eventName]?.invoke("payload")
+        socket.listeners[eventName]?.invoke("""{"v":"payload"}""")
 
         assertEquals(listOf("payload"), received)
     }
@@ -82,9 +86,9 @@ class LiveUpdatesConnectionTest {
         conn.liveSocket = socket
         val eventName = "test-throw-${System.nanoTime()}"
 
-        LiveUpdatesEventRegistry.register(eventName) { _, _, _ -> throw RuntimeException("handler-error") }
+        LiveUpdatesEventRegistry.register(eventName, TestMsg.serializer()) { _, _, _ -> throw RuntimeException("handler-error") }
         conn.bindHandlers(socket)
-        socket.listeners[eventName]?.invoke("trigger")
+        socket.listeners[eventName]?.invoke("""{"v":"trigger"}""")
 
         val msg = socket.sent.single()
         assertTrue(msg.contains(""""status": "failure""""), msg)
@@ -99,12 +103,12 @@ class LiveUpdatesConnectionTest {
         val eventName = "test-mockito-${System.nanoTime()}"
         val received = mutableListOf<String>()
 
-        LiveUpdatesEventRegistry.register(eventName) { msg, _, _ -> received.add(msg) }
+        LiveUpdatesEventRegistry.register(eventName, TestMsg.serializer()) { data, _, _ -> received.add(data.v) }
         conn.bindHandlers(socket)
 
         val handlerCaptor = argumentCaptor<(String) -> Unit>()
         verify(socket, atLeastOnce()).on(eq(eventName), handlerCaptor.capture())
-        handlerCaptor.lastValue.invoke("mockito-payload")
+        handlerCaptor.lastValue.invoke("""{"v":"mockito-payload"}""")
 
         assertEquals(listOf("mockito-payload"), received)
     }
@@ -151,8 +155,8 @@ class LiveUpdatesConnectionTest {
             }
 
             val received = mutableListOf<String>()
-            LiveUpdatesEventRegistry.register(eventName) { msg, _, sender ->
-                received.add(msg)
+            LiveUpdatesEventRegistry.register(eventName, TestMsg.serializer()) { data, _, sender ->
+                received.add(data.v)
                 sender.sendSuccess()
             }
 
@@ -160,7 +164,7 @@ class LiveUpdatesConnectionTest {
             conn.start()
             try {
                 assertTrue(handlerBound.await(3, TimeUnit.SECONDS), "handler not bound within 3 s")
-                capturedListeners[eventName]?.call("integration-payload")
+                capturedListeners[eventName]?.call("""{"v":"integration-payload"}""")
                 assertEquals(listOf("integration-payload"), received)
             } finally {
                 conn.stop()
@@ -188,13 +192,13 @@ class LiveUpdatesConnectionTest {
                 mockSocket
             }
 
-            LiveUpdatesEventRegistry.register(eventName) { _, _, _ -> throw RuntimeException("integration-error") }
+            LiveUpdatesEventRegistry.register(eventName, TestMsg.serializer()) { _, _, _ -> throw RuntimeException("integration-error") }
 
             val conn = LiveUpdatesConnection(server) { _, _ -> mockSocket }
             conn.start()
             try {
                 assertTrue(handlerBound.await(3, TimeUnit.SECONDS), "handler not bound within 3 s")
-                capturedListeners[eventName]?.call("trigger")
+                capturedListeners[eventName]?.call("""{"v":"trigger"}""")
                 verify(mockSocket, atLeastOnce()).emit(eq("mod_response"), any<String>())
             } finally {
                 conn.stop()

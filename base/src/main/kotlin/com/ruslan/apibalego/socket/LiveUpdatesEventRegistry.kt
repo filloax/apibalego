@@ -1,11 +1,32 @@
 package com.ruslan.apibalego.socket
 
 import com.ruslan.apibalego.Apibalego
-import com.ruslan.apibalego.socket.ResponseSender
+import kotlinx.serialization.KSerializer
+import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 
-fun interface LiveUpdatesEventHandler {
-    fun handle(message: String, server: MinecraftServer, sender: ResponseSender)
+private val json = Json {
+    ignoreUnknownKeys = true
+    isLenient = true
+}
+
+fun interface LiveUpdatesEventHandler<T : Any> {
+    fun handleEvent(data: T, server: MinecraftServer, sender: ResponseSender)
+}
+
+/**
+ * Registration artifact for a websocket event channel. Owns deserialization of the raw socket
+ * message into [T] before dispatching to [handler]. Analogous to [com.ruslan.apibalego.http.ApiEntryType].
+ */
+class LiveUpdatesEvent<T : Any> internal constructor(
+    val eventName: String,
+    val deserializer: KSerializer<T>?,
+    private val parse: (String) -> T,
+    private val handler: LiveUpdatesEventHandler<T>,
+) {
+    fun dispatch(message: String, server: MinecraftServer, sender: ResponseSender) {
+        handler.handleEvent(parse(message), server, sender)
+    }
 }
 
 /**
@@ -16,15 +37,32 @@ fun interface LiveUpdatesEventHandler {
  * (e.g. growsseth's "rdialogue").
  */
 object LiveUpdatesEventRegistry {
-    const val RELOAD_EVENT = "reload"
+    private val events = mutableMapOf<String, LiveUpdatesEvent<*>>()
 
-    private val handlers = mutableMapOf<String, LiveUpdatesEventHandler>()
-
-    fun register(eventType: String, handler: LiveUpdatesEventHandler) {
-        if (handlers.put(eventType, handler) != null) {
-            Apibalego.LOGGER.warn("Overwrote live update handler for event '$eventType'")
+    fun <T : Any> register(
+        eventName: String,
+        deserializer: KSerializer<T>,
+        handler: LiveUpdatesEventHandler<T>,
+    ): LiveUpdatesEvent<T> {
+        val event = LiveUpdatesEvent(eventName, deserializer, { msg -> json.decodeFromString(deserializer, msg) }, handler)
+        if (events.put(eventName, event) != null) {
+            Apibalego.LOGGER.warn("Overwrote live update handler for event '$eventName'")
         }
+        return event
     }
 
-    fun all(): Map<String, LiveUpdatesEventHandler> = handlers
+    /** Register a handler for an event with no meaningful payload (e.g. reload triggers). */
+    fun register(
+        eventName: String,
+        handler: (server: MinecraftServer, sender: ResponseSender) -> Unit,
+    ): LiveUpdatesEvent<Unit> {
+        val wrapped = LiveUpdatesEventHandler<Unit> { _, server, sender -> handler(server, sender) }
+        val event = LiveUpdatesEvent(eventName, null, { _ -> Unit }, wrapped)
+        if (events.put(eventName, event) != null) {
+            Apibalego.LOGGER.warn("Overwrote live update handler for event '$eventName'")
+        }
+        return event
+    }
+
+    fun all(): Map<String, LiveUpdatesEvent<*>> = events
 }

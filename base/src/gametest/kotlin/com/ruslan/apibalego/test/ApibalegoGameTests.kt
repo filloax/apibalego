@@ -14,6 +14,9 @@ import com.ruslan.apibalego.http.ApiEntryType
 import com.ruslan.apibalego.http.ID_API_HANDLER_COMMAND
 import com.ruslan.apibalego.http.ID_API_HANDLER_STRUCTURE
 import com.ruslan.apibalego.http.ID_API_HANDLER_TOAST
+import com.ruslan.apibalego.socket.LIVE_EVENT_CMD
+import com.ruslan.apibalego.socket.LIVE_EVENT_RELOAD
+import com.ruslan.apibalego.socket.LIVE_EVENT_TOAST
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -76,7 +79,7 @@ object ApibalegoGameTests {
     /** The built-in live-update handlers are registered. */
     fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) {
         val keys = LiveUpdatesEventRegistry.all().keys
-        listOf(LiveUpdatesEventRegistry.RELOAD_EVENT, "toast", "cmd").forEach {
+        listOf(LIVE_EVENT_RELOAD, LIVE_EVENT_TOAST, LIVE_EVENT_CMD).forEach {
             helper.assertTrue(it in keys, "Built-in live update handler '$it' not registered (have $keys)")
         }
         helper.succeed()
