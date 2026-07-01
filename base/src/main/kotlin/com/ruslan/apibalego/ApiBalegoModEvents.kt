@@ -24,6 +24,7 @@ abstract class ApiBalegoModEvents {
     fun initCallbacks() {
         onServerStarting { server ->
             DataRemoteSync.Callbacks.handleServerAboutToStartEvent(server)
+            DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, server)
             LiveUpdatesConnection.serverStart(server)
         }
         onServerStopping { server ->
