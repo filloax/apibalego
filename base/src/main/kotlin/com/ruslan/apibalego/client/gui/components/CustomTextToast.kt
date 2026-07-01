@@ -111,12 +111,6 @@ class CustomTextToast private constructor(
         )
     }
 
-    fun reset(title: Component, message: Component?, fontToSplit: Font? = null) {
-        this.title = title
-        messageLines = checkNullAndSplit(message, fontToSplit)
-        changed = true
-    }
-
 
     override fun getWantedVisibility(): Toast.Visibility {
         return this.wantedVisibility

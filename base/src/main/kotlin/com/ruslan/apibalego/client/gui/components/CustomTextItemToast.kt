@@ -56,13 +56,6 @@ class CustomTextItemToast private constructor(
         return (20 + messageLines.size.coerceAtLeast(1) * LINE_SPACING).coerceAtMost(32 * MAX_SLOTS)
     }
 
-    fun reset(title: Component, item: ItemStack, message: Component?, fontToSplit: Font? = null) {
-        this.title = title
-        this.item = item
-        messageLines = checkNullAndSplit(message, fontToSplit)
-        changed = true
-    }
-
     override fun extractRenderState(guiGraphics: GuiGraphicsExtractor, font: Font, visibilityTime: Long) {
         val i = this.width()
         if (i == 160 && this.messageLines.size <= 1) {
@@ -90,14 +83,16 @@ class CustomTextItemToast private constructor(
         }
 
         if (this.messageLines.isEmpty()) {
-            guiGraphics.text(font, this.title, 18, 12, -256, false)
+            guiGraphics.text(font, this.title, 30, 12, -256, false)
         } else {
-            guiGraphics.text(font, this.title, 18, 7, -256, false)
+            guiGraphics.text(font, this.title, 30, 7, -256, false)
 
             for (j1 in this.messageLines.indices) {
-                guiGraphics.text(font, this.messageLines.get(j1), 18, 18 + j1 * 12, -1, false)
+                guiGraphics.text(font, this.messageLines.get(j1), 30, 18 + j1 * 12, -1, false)
             }
         }
+
+        guiGraphics.fakeItem(this.item, 8, 8)
     }
 
     private fun renderBackgroundRow(guiGraphics: GuiGraphicsExtractor, width: Int, vOffset: Int, y: Int, height: Int) {
