@@ -34,6 +34,8 @@ class ApiEntryType<T : Any> internal constructor(
         raw.details?.takeIf { it != JsonNull }
             ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
     }
+
+    override fun toString() = key.toString()
 }
 
 interface ApiEntryHandler<T : Any> {
