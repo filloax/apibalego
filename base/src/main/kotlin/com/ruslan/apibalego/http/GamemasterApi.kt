@@ -38,14 +38,15 @@ object GamemasterApi {
             Apibalego.LOGGER.info("Gamemaster data unchanged, not re-dispatching")
             return
         }
-        lastHash = hash
 
-        val currentlyActive = activeEntries.filter { it.active }
+        val currentlyActive = entries.filter { it.active }
 
         activeEntries.clear()
         activeEntries.addAll(currentlyActive)
 
         ApiEntryRegistry.dispatchUpdate(currentlyActive, server)
+
+        lastHash = hash
     }
 
     private fun reset() {
