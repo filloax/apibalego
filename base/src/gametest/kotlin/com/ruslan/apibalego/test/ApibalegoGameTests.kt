@@ -207,60 +207,38 @@ object ApibalegoGameTests {
         active = active,
     )
 
-    /** Inactive structure entries are not added to the spawn map. */
-    fun structureHandlerSkipsInactive(helper: GameTestHelper) {
-        val bogusId = Identifier.fromNamespaceAndPath("gametest", "nope_inactive")
-        val entryId = "gt-struct-inactive-${System.nanoTime()}"
-        val spawnKey = "apibalego_structure_$entryId"
-        RemoteStructuresHandler.handleApiUpdate(
-            helper.level.server,
-            listOf(makeStructureEntry(entryId, bogusId, active = false)),
-        )
-        // Tests run concurrently — check for the specific key, not isEmpty()
-        helper.runAfterDelay(1) {
-            helper.assertFalse(
-                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
-                "Inactive structure entry must not be added to map",
-            )
-            helper.succeed()
-        }
-    }
-
-    /** Active entries referencing a non-existent structure ID are skipped without crashing. */
-    fun structureHandlerSkipsUnknownStructure(helper: GameTestHelper) {
-        val bogusId = Identifier.fromNamespaceAndPath("gametest", "nonexistent_structure")
-        val entryId = "gt-struct-unknown-${System.nanoTime()}"
-        val spawnKey = "apibalego_structure_$entryId"
-        RemoteStructuresHandler.handleApiUpdate(
-            helper.level.server,
-            listOf(makeStructureEntry(entryId, bogusId)),
-        )
-        // Tests run concurrently — check for the specific key, not isEmpty()
-        helper.runAfterDelay(1) {
-            helper.assertFalse(
-                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
-                "Non-existent structure must be silently skipped",
-            )
-            helper.succeed()
-        }
-    }
-
     /**
-     * A valid structure entry populates the handler map, hands off to FxLib's queue, and
-     * the structure appears in the vanilla StructureManager (via FxLib's mixin). A subsequent
-     * empty re-dispatch clears the map.
+     * Combined lifecycle test for [RemoteStructuresHandler]: an inactive entry is skipped, an entry
+     * pointing at a non-existent structure is skipped, then a valid entry populates the handler map,
+     * hands off to FxLib's queue, and the structure appears in the vanilla StructureManager (via
+     * FxLib's mixin). A subsequent empty re-dispatch clears the map.
      *
-     * FxLib has two async hops before placement: [EventUtil.runWhenServerStarted] (1 tick) then
-     * [ScheduledServerTask] (1 more tick). Sync checks use [GameTestHelper.runAfterDelay];
-     * world-placement polling uses [GameTestHelper.succeedWhen] via [StructureManager.startsForStructure].
+     * Run as a single sequential test rather than several concurrent ones: handleApiUpdate clears
+     * its full spawn map on every dispatch (mirrors GamemasterApi always sending a complete snapshot
+     * each poll), so separate concurrently-running gametests sharing this handler's static state
+     * would wipe out each other's entries mid-test — same issue [datapackHandlerFullLifecycle]
+     * documents for the datapack handler.
      *
-     * Clear check lives inside the [succeedWhen] block: the first pass where the world check passes
-     * dispatches the clear (async); the re-run one tick later sees the cleared map and succeeds.
+     * FxLib has two async hops before placement: [EventUtil.runWhenServerStarted] then a
+     * [ScheduledServerTask]. Under the gametest server's load (many tests/mock players spawning
+     * in the same batch can push it several ticks behind — "Can't keep up!"), those hops don't
+     * reliably land within a fixed tick count. So every eventual condition below is checked via
+     * [GameTestSequence.thenWaitUntil], which retries every tick until it stops throwing, rather
+     * than via a fixed [GameTestHelper.runAfterDelay] that assumes a specific number of ticks.
+     * The two negative/invariant checks (inactive and unknown-structure entries never appearing)
+     * don't have this problem since they'd hold on any tick, so a short [thenExecuteAfter] gap is
+     * enough there — it's just spacing out the three dispatches, not waiting on a result.
      */
-    fun structureHandlerRegistersAndClearsStructure(helper: GameTestHelper) {
+    fun structureHandlerGeneralTest(helper: GameTestHelper) {
         val server = helper.level.server
+        val bogusId = Identifier.fromNamespaceAndPath("gametest", "nonexistent_structure")
         val validStructId = Identifier.fromNamespaceAndPath("minecraft", "igloo")
-        val entryId = "gt-struct-valid-${System.nanoTime()}"
+        val inactiveEntryId = "gt-struct-inactive-${System.nanoTime()}"
+        val unknownEntryId = "gt-struct-unknown-${System.nanoTime()}"
+        val validEntryId = "gt-struct-valid-${System.nanoTime()}"
+        val inactiveSpawnKey = "apibalego_structure_$inactiveEntryId"
+        val unknownSpawnKey = "apibalego_structure_$unknownEntryId"
+        val validSpawnKey = "apibalego_structure_$validEntryId"
         // Spawn at the test's own world position so the placement is tied to this test's region
         // rather than a fixed global coord (BlockPos.ZERO) that persists across runs.
         val spawnPos = helper.absolutePos(BlockPos(2, 0, 2))
@@ -275,41 +253,60 @@ object ApibalegoGameTests {
 
         RemoteStructuresHandler.handleApiUpdate(
             server,
-            listOf(makeStructureEntry(entryId, validStructId, spawnPos)),
+            listOf(makeStructureEntry(inactiveEntryId, validStructId, active = false)),
         )
 
-        val spawnKey = "apibalego_structure_$entryId"
-        // runWhenServerStarted now does more work (chunk lookup + ScheduledServerTask), so
-        // give it 2 ticks instead of 1 to guarantee it completes before checking the maps.
-        helper.runAfterDelay(2) {
-            helper.assertTrue(
-                RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
-                "Valid structure '$validStructId' must be in handler spawn map after dispatch",
-            )
-            helper.assertTrue(
-                FxLibServices.fixedStructureGeneration.registeredStructureSpawns.containsKey(spawnKey),
-                "Handler must call fixedStructureGeneration.register() — spawnKey '$spawnKey' not in FxLib queue",
-            )
-
+        helper.startSequence()
+            .thenExecuteAfter(2) {
+                helper.assertFalse(
+                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(inactiveSpawnKey),
+                    "Inactive structure entry must not be added to map",
+                )
+                RemoteStructuresHandler.handleApiUpdate(
+                    server,
+                    listOf(makeStructureEntry(unknownEntryId, bogusId)),
+                )
+            }
+            .thenExecuteAfter(2) {
+                helper.assertFalse(
+                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(unknownSpawnKey),
+                    "Non-existent structure must be silently skipped",
+                )
+                RemoteStructuresHandler.handleApiUpdate(
+                    server,
+                    listOf(makeStructureEntry(validEntryId, validStructId, spawnPos)),
+                )
+            }
+            .thenWaitUntil {
+                helper.assertTrue(
+                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(validSpawnKey),
+                    "Valid structure '$validStructId' must be in handler spawn map after dispatch",
+                )
+                helper.assertTrue(
+                    FxLibServices.fixedStructureGeneration.registeredStructureSpawns.containsKey(validSpawnKey),
+                    "Handler must call fixedStructureGeneration.register() — spawnKey '$validSpawnKey' not in FxLib queue",
+                )
+            }
             // Verify placement via vanilla StructureManager routed through FxLib's mixin.
             // startsForStructure(ChunkPos, Predicate) checks at chunk granularity so the igloo
             // doesn't need to overlap spawnPos exactly (igloo doesn't implement FixablePosition).
-            // Clear check is also here: first retry after the world check passes dispatches the
-            // clear (async); the next retry sees the empty map and all assertions pass.
-            helper.succeedWhen {
+            .thenWaitUntil {
                 val starts = helper.level.structureManager().startsForStructure(spawnChunk) { it == structure }
                 helper.assertTrue(
                     structure != null && starts.isNotEmpty(),
                     "Structure '$validStructId' not found via vanilla StructureManager in chunk $spawnChunk",
                 )
+            }
+            .thenExecute {
                 RemoteStructuresHandler.handleApiUpdate(server, emptyList())
-                // Tests run concurrently — check our specific key was cleared, not isEmpty()
+            }
+            .thenWaitUntil {
                 helper.assertFalse(
-                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(spawnKey),
+                    RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(validSpawnKey),
                     "Spawn map must not contain entry after re-dispatch with no entries",
                 )
             }
-        }
+            .thenSucceed()
     }
 
     /** Command entry with the same id is not executed more than once. */
