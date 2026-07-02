@@ -5,6 +5,8 @@ import com.filloax.fxlib.api.entity.getPersistData
 import com.ruslan.apibalego.ApiBalegoConstants
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
+import com.ruslan.apibalego.data.ApibalegoPersistentData
+import com.ruslan.apibalego.handlers.RemoteDatapackHandler
 import com.ruslan.apibalego.handlers.RemoteStructuresHandler
 import com.ruslan.apibalego.handlers.ToastHandler
 import com.ruslan.apibalego.http.ApiEntry
@@ -12,12 +14,14 @@ import com.ruslan.apibalego.http.ApiEntryRaw
 import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.http.ApiEntryType
 import com.ruslan.apibalego.http.ID_API_HANDLER_COMMAND
+import com.ruslan.apibalego.http.ID_API_HANDLER_DATAPACK
 import com.ruslan.apibalego.http.ID_API_HANDLER_STRUCTURE
 import com.ruslan.apibalego.http.ID_API_HANDLER_TOAST
 import com.ruslan.apibalego.socket.LIVE_EVENT_CMD
 import com.ruslan.apibalego.socket.LIVE_EVENT_RELOAD
 import com.ruslan.apibalego.socket.LIVE_EVENT_TOAST
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
+import com.sun.net.httpserver.HttpServer
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import net.minecraft.core.BlockPos
@@ -28,7 +32,13 @@ import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.gamerules.GameRules
+import net.minecraft.world.level.storage.LevelResource
+import java.io.ByteArrayOutputStream
+import java.net.InetSocketAddress
+import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.zip.ZipEntry
+import java.util.zip.ZipOutputStream
 import kotlin.jvm.optionals.getOrNull
 
 /**
@@ -61,18 +71,28 @@ object ApibalegoGameTests {
         helper.succeed()
     }
 
-    /** Inactive entries filtered by the caller before dispatch are not sent to handlers. */
-    fun apiEventDispatchInactiveSkipped(helper: GameTestHelper) {
-        val counter = AtomicInteger(0)
-        val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_inactive")
-        ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
-        val type = ApiEntryRegistry.lookup(key)
+    /**
+     * dispatchFullUpdate must still invoke a registered type's handler with an empty list when
+     * that type has no entries in the given batch, so stateful handlers (datapack, structure)
+     * see "removed" rather than simply not being called at all.
+     */
+    fun apiEventDispatchHitsAbsentType(helper: GameTestHelper) {
+        val calledWithSize = AtomicInteger(-1)
+        val presentKey = Identifier.fromNamespaceAndPath("gametest", "dispatch_full_present")
+        val absentKey = Identifier.fromNamespaceAndPath("gametest", "dispatch_full_absent")
+        ApiEntryRegistry.registerSimple(presentKey, { _, _ -> })
+        ApiEntryRegistry.registerSimple(absentKey, { _, entries -> calledWithSize.set(entries.size) })
+        val presentType = ApiEntryRegistry.lookup(presentKey)
 
-        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
-        // Filtering inactive is caller responsibility (mirrors GamemasterApi behavior)
-        ApiEntryRegistry.dispatchUpdate(entries.filter { it.active }, helper.level.server)
+        ApiEntryRegistry.dispatchUpdate(
+            listOf(ApiEntryRaw(type = presentType, id = "x", active = true)),
+            helper.level.server,
+        )
 
-        helper.assertTrue(counter.get() == 0, "Inactive entry must not be dispatched")
+        helper.assertTrue(
+            calledWithSize.get() == 0,
+            "Handler for a type absent from the full-update entries should still run, with an empty list (got ${calledWithSize.get()})",
+        )
         helper.succeed()
     }
 
@@ -332,6 +352,139 @@ object ApibalegoGameTests {
                 } finally {
                     server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
                     ApiBalegoConfig.remoteCommandExecution = prevEnabled
+                }
+            }
+        }
+    }
+
+    private fun makeDatapackEntry(id: String, downloadUrl: String, version: String = "1", active: Boolean = true) = ApiEntryRaw(
+        type = ApiEntryRegistry.lookup(ID_API_HANDLER_DATAPACK),
+        details = buildJsonObject {
+            put("downloadUrl", JsonPrimitive(downloadUrl))
+            put("version", JsonPrimitive(version))
+        },
+        id = id,
+        active = active,
+    )
+
+    /** Minimal but valid datapack zip: just a pack.mcmeta, enough for FolderRepositorySource to recognize it. */
+    private fun buildDatapackZipBytes(): ByteArray {
+        val baos = ByteArrayOutputStream()
+        ZipOutputStream(baos).use { zip ->
+            zip.putNextEntry(ZipEntry("pack.mcmeta"))
+            zip.write("""{"pack":{"pack_format":48,"description":"gametest datapack"}}""".toByteArray())
+            zip.closeEntry()
+        }
+        return baos.toByteArray()
+    }
+
+    private fun startZipServer(bytes: ByteArray, requestCount: AtomicInteger? = null): HttpServer {
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        server.createContext("/pack.zip") { exchange ->
+            requestCount?.incrementAndGet()
+            exchange.sendResponseHeaders(200, bytes.size.toLong())
+            exchange.responseBody.use { it.write(bytes) }
+        }
+        server.start()
+        return server
+    }
+
+    /** Datapack sync is a no-op when disabled via config. */
+    fun datapackHandlerSkipsWhenDisabled(helper: GameTestHelper) {
+        val server = helper.level.server
+        val prevEnabled = ApiBalegoConfig.remoteDatapackSync
+        ApiBalegoConfig.remoteDatapackSync = false
+        val entryId = "gt-dp-disabled-${System.nanoTime()}"
+
+        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, "http://127.0.0.1:1/unused.zip")), server)
+
+        helper.runAfterDelay(1) {
+            try {
+                helper.assertFalse(
+                    ApibalegoPersistentData.get(server).installedDatapacks.containsKey(entryId),
+                    "Disabled datapack sync must not install anything",
+                )
+                helper.succeed()
+            } finally {
+                ApiBalegoConfig.remoteDatapackSync = prevEnabled
+            }
+        }
+    }
+
+    /**
+     * End-to-end lifecycle for a single gamemaster-managed datapack: rejected while external URLs
+     * are disabled and the origin differs -> installed and selected once allowed -> re-dispatching
+     * the same version doesn't re-download -> deselected and deleted once no longer desired.
+     *
+     * Run as a single sequential test rather than several concurrent ones: RemoteDatapackHandler
+     * diffs its full desired set against previously-installed state on every dispatch (mirrors
+     * GamemasterApi always sending a complete snapshot each poll), so separate concurrently-running
+     * gametests sharing this handler's persistent state would make each other's packs look like
+     * they'd disappeared. `ApiBalegoConfig.remoteDatapackSync` is re-asserted before every dispatch
+     * since it's also touched by the concurrently-running [datapackHandlerSkipsWhenDisabled].
+     */
+    fun datapackHandlerFullLifecycle(helper: GameTestHelper) {
+        val server = helper.level.server
+        val prevEnabled = ApiBalegoConfig.remoteDatapackSync
+        val prevExternal = ApiBalegoConfig.remoteDatapackAllowExternalUrl
+        val prevSyncUrl = ApiBalegoConfig.dataSyncUrl
+        ApiBalegoConfig.remoteDatapackSync = true
+        ApiBalegoConfig.remoteDatapackAllowExternalUrl = false
+        // Arbitrary origin guaranteed to differ from the download server's port below.
+        ApiBalegoConfig.dataSyncUrl = "http://127.0.0.1:1"
+
+        val requestCount = AtomicInteger(0)
+        val httpServer = startZipServer(buildDatapackZipBytes(), requestCount)
+        val entryId = "gt-dp-lifecycle-${System.nanoTime()}"
+        val fileName = "apibalego_dp_$entryId.zip"
+        val expectedPackId = "file/$fileName"
+        val url = "http://127.0.0.1:${httpServer.address.port}/pack.zip"
+        val packFile = server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(fileName)
+        val phase = AtomicInteger(0)
+
+        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+
+        helper.succeedWhen {
+            ApiBalegoConfig.remoteDatapackSync = true
+            when (phase.get()) {
+                0 -> {
+                    helper.assertFalse(Files.exists(packFile), "download must be rejected while external URLs are disabled")
+                    phase.set(1)
+                    ApiBalegoConfig.remoteDatapackAllowExternalUrl = true
+                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+                    helper.assertTrue(false, "waiting for retry with external URLs allowed")
+                }
+                1 -> {
+                    helper.assertTrue(Files.exists(packFile), "download should succeed once external URLs are allowed")
+                    helper.assertTrue(
+                        server.packRepository.selectedIds.contains(expectedPackId),
+                        "Pack '$expectedPackId' should be selected after install",
+                    )
+                    helper.assertTrue(
+                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == "1",
+                        "installedDatapacks should record the installed version for '$entryId'",
+                    )
+                    helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
+                    phase.set(2)
+                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+                    helper.assertTrue(false, "waiting for same-version re-dispatch to settle")
+                }
+                2 -> {
+                    helper.assertTrue(
+                        requestCount.get() == 1,
+                        "same-version re-dispatch must not trigger a second download, got ${requestCount.get()} requests",
+                    )
+                    phase.set(3)
+                    RemoteDatapackHandler.handleApiUpdate(server, emptyList())
+                    helper.assertTrue(false, "waiting for removal dispatch to settle")
+                }
+                else -> {
+                    helper.assertFalse(server.packRepository.selectedIds.contains(expectedPackId), "pack should be deselected after removal")
+                    helper.assertFalse(Files.exists(packFile), "pack file should be deleted after removal")
+                    httpServer.stop(0)
+                    ApiBalegoConfig.remoteDatapackSync = prevEnabled
+                    ApiBalegoConfig.remoteDatapackAllowExternalUrl = prevExternal
+                    ApiBalegoConfig.dataSyncUrl = prevSyncUrl
                 }
             }
         }

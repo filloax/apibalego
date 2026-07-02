@@ -14,6 +14,10 @@
     "apibalego.config.web.liveUpdatePort.name": "Live update port",
     "apibalego.config.web.remoteCommandExecution.name": "Remote command execution",
     "apibalego.config.web.remoteCommandExecution.comment": "Allow the gamemaster to execute any arbitrary command.",
+    "apibalego.config.web.remoteDatapackSync.name": "Remote datapack sync",
+    "apibalego.config.web.remoteDatapackSync.comment": "Allow the gamemaster to download and enable/disable datapacks. Note that newly loaded content may not be sent to already-connected players until they rejoin.",
+    "apibalego.config.web.remoteDatapackAllowExternalUrl.name": "Allow external datapack URLs",
+    "apibalego.config.web.remoteDatapackAllowExternalUrl.comment": "If disabled, datapack download URLs must be on the same origin as the data sync URL. Enable to allow downloading from any URL.",
 
     "apibalego.commands.gmaster.help": "Allows to configure the server to connect to a gamemaster console and enable §5gamemaster mode§r.\n§eMake sure to only connect to trusted sources, as they will be able to remotely run commands and more!§r",
     "apibalego.commands.gmaster.status_off": "Gamemaster mode is currently disabled.",

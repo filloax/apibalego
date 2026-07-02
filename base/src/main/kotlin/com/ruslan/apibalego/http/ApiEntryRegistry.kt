@@ -81,8 +81,9 @@ object ApiEntryRegistry {
     fun lookup(key: Identifier) = registry[key] ?: throw UnknownApiEntryTypeException(key)
 
     fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
-        all.groupBy { it.type }.forEach { (type, entries) ->
-            type.dispatchUpdate(entries, server)
+        val byType = all.groupBy { it.type }
+        registry.values.forEach { type ->
+            type.dispatchUpdate(byType[type] ?: emptyList(), server)
         }
     }
 

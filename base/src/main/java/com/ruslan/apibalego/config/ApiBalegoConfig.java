@@ -43,4 +43,11 @@ public final class ApiBalegoConfig {
     @ConfigEntry(id = "remoteCommandExecution", translation = T_PREF + "remoteCommandExecution.name")
     @Comment(value = "Allow the gamemaster to execute any arbitrary command.", translation = T_PREF + "remoteCommandExecution.comment")
     public static boolean remoteCommandExecution = false;
+
+    @ConfigEntry(id = "remoteDatapackSync", translation = T_PREF + "remoteDatapackSync.name")
+    @Comment(value = "Allow the gamemaster to download and enable/disable datapacks. Note that newly loaded content may not be sent to already-connected players until they rejoin.", translation = T_PREF + "remoteDatapackSync.comment")
+    public static boolean remoteDatapackSync = false;
+    @ConfigEntry(id = "remoteDatapackAllowExternalUrl", translation = T_PREF + "remoteDatapackAllowExternalUrl.name")
+    @Comment(value = "If disabled, datapack download URLs must be on the same origin as the data sync URL. Enable to allow downloading from any URL.", translation = T_PREF + "remoteDatapackAllowExternalUrl.comment")
+    public static boolean remoteDatapackAllowExternalUrl = false;
 }

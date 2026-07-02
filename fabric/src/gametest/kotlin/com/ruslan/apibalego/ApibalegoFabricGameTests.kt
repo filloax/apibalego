@@ -19,7 +19,7 @@ object ApibalegoFabricGameTests {
     fun apiEventDispatchActive(helper: GameTestHelper) = ApibalegoGameTests.apiEventDispatchActive(helper)
 
     @GameTest
-    fun apiEventDispatchInactiveSkipped(helper: GameTestHelper) = ApibalegoGameTests.apiEventDispatchInactiveSkipped(helper)
+    fun apiEventDispatchHitsAbsentType(helper: GameTestHelper) = ApibalegoGameTests.apiEventDispatchHitsAbsentType(helper)
 
     @GameTest
     fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) = ApibalegoGameTests.liveUpdatesBuiltinsRegistered(helper)
@@ -47,4 +47,10 @@ object ApibalegoFabricGameTests {
 
     @GameTest
     fun structureHandlerRegistersAndClearsStructure(helper: GameTestHelper) = ApibalegoGameTests.structureHandlerRegistersAndClearsStructure(helper)
+
+    @GameTest
+    fun datapackHandlerSkipsWhenDisabled(helper: GameTestHelper) = ApibalegoGameTests.datapackHandlerSkipsWhenDisabled(helper)
+
+    @GameTest
+    fun datapackHandlerFullLifecycle(helper: GameTestHelper) = ApibalegoGameTests.datapackHandlerFullLifecycle(helper)
 }
