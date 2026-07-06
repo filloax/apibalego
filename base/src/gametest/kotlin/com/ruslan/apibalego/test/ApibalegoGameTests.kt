@@ -408,10 +408,16 @@ object ApibalegoGameTests {
         }
     }
 
+    private fun datapackIdentity(version: String, downloadUrl: String) = "${version}_${downloadUrl.hashCode()}"
+
     /**
      * End-to-end lifecycle for a single gamemaster-managed datapack: rejected while external URLs
      * are disabled and the origin differs -> installed and selected once allowed -> re-dispatching
-     * the same version doesn't re-download -> deselected and deleted once no longer desired.
+     * the same version doesn't re-download -> version bump while selected downloads to a new file
+     * and retires the old one instead of overwriting it (avoiding access denied OS errors) ->
+     * changing the download URL alone (same version) is also detected as a change and swapped the
+     * same way (regression test for a URL rename being silently ignored) -> deselected and deleted
+     * once no longer desired.
      *
      * Run as a single sequential test rather than several concurrent ones: RemoteDatapackHandler
      * diffs its full desired set against previously-installed state on every dispatch (mirrors
@@ -432,11 +438,22 @@ object ApibalegoGameTests {
 
         val requestCount = AtomicInteger(0)
         val httpServer = startZipServer(buildDatapackZipBytes(), requestCount)
+        val httpServer2 = startZipServer(buildDatapackZipBytes(), requestCount)
         val entryId = "gt-dp-lifecycle-${System.nanoTime()}"
-        val fileName = "apibalego_dp_$entryId.zip"
-        val expectedPackId = "file/$fileName"
         val url = "http://127.0.0.1:${httpServer.address.port}/pack.zip"
-        val packFile = server.getWorldPath(LevelResource.DATAPACK_DIR).resolve(fileName)
+        val url2 = "http://127.0.0.1:${httpServer2.address.port}/pack.zip"
+        // filename is identity-derived (version + url hash, see RemoteDatapackHandler) so an
+        // in-place update never overwrites the currently-selected (locked-on-Windows) zip
+        val fileNameV1 = "apibalego_dp_${entryId}_${datapackIdentity("1", url)}.zip"
+        val expectedPackIdV1 = "file/$fileNameV1"
+        val fileNameV2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url)}.zip"
+        val expectedPackIdV2 = "file/$fileNameV2"
+        val fileNameV2Url2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url2)}.zip"
+        val expectedPackIdV2Url2 = "file/$fileNameV2Url2"
+        val dpDir = server.getWorldPath(LevelResource.DATAPACK_DIR)
+        val packFileV1 = dpDir.resolve(fileNameV1)
+        val packFileV2 = dpDir.resolve(fileNameV2)
+        val packFileV2Url2 = dpDir.resolve(fileNameV2Url2)
         val phase = AtomicInteger(0)
 
         ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
@@ -445,21 +462,21 @@ object ApibalegoGameTests {
             ApiBalegoConfig.remoteDatapackSync = true
             when (phase.get()) {
                 0 -> {
-                    helper.assertFalse(Files.exists(packFile), "download must be rejected while external URLs are disabled")
+                    helper.assertFalse(Files.exists(packFileV1), "download must be rejected while external URLs are disabled")
                     phase.set(1)
                     ApiBalegoConfig.remoteDatapackAllowExternalUrl = true
                     ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
                     helper.assertTrue(false, "waiting for retry with external URLs allowed")
                 }
                 1 -> {
-                    helper.assertTrue(Files.exists(packFile), "download should succeed once external URLs are allowed")
+                    helper.assertTrue(Files.exists(packFileV1), "download should succeed once external URLs are allowed")
                     helper.assertTrue(
-                        server.packRepository.selectedIds.contains(expectedPackId),
-                        "Pack '$expectedPackId' should be selected after install",
+                        server.packRepository.selectedIds.contains(expectedPackIdV1),
+                        "Pack '$expectedPackIdV1' should be selected after install",
                     )
                     helper.assertTrue(
-                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == "1",
-                        "installedDatapacks should record the installed version for '$entryId'",
+                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("1", url),
+                        "installedDatapacks should record the installed identity for '$entryId'",
                     )
                     helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
                     phase.set(2)
@@ -472,13 +489,51 @@ object ApibalegoGameTests {
                         "same-version re-dispatch must not trigger a second download, got ${requestCount.get()} requests",
                     )
                     phase.set(3)
+                    // v1 is still selected here: this must download v2 to a new file rather than
+                    // overwrite v1's (locked-while-selected) file in place
+                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url, version = "2")), server)
+                    helper.assertTrue(false, "waiting for version bump to settle")
+                }
+                3 -> {
+                    helper.assertTrue(Files.exists(packFileV2), "v2 should be downloaded to its own file")
+                    helper.assertTrue(
+                        server.packRepository.selectedIds.contains(expectedPackIdV2) &&
+                            !server.packRepository.selectedIds.contains(expectedPackIdV1),
+                        "v2 should replace v1 in the selection",
+                    )
+                    helper.assertTrue(
+                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("2", url),
+                        "installedDatapacks should record the bumped identity for '$entryId'",
+                    )
+                    helper.assertTrue(requestCount.get() == 2, "version bump should trigger exactly 1 more download, got ${requestCount.get()} total")
+                    helper.assertFalse(Files.exists(packFileV1), "old v1 file should be deleted after being retired")
+                    phase.set(4)
+                    // same version, only the URL changes: must still be detected as a change
+                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url2, version = "2")), server)
+                    helper.assertTrue(false, "waiting for URL-only change to settle")
+                }
+                4 -> {
+                    helper.assertTrue(Files.exists(packFileV2Url2), "URL-only change should be downloaded to its own file")
+                    helper.assertTrue(
+                        server.packRepository.selectedIds.contains(expectedPackIdV2Url2) &&
+                            !server.packRepository.selectedIds.contains(expectedPackIdV2),
+                        "new URL's pack should replace the old URL's pack in the selection",
+                    )
+                    helper.assertTrue(
+                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("2", url2),
+                        "installedDatapacks should record the new URL's identity for '$entryId'",
+                    )
+                    helper.assertTrue(requestCount.get() == 3, "URL-only change should trigger exactly 1 more download, got ${requestCount.get()} total")
+                    helper.assertFalse(Files.exists(packFileV2), "old (same-version, old-URL) file should be deleted after being retired")
+                    phase.set(5)
                     RemoteDatapackHandler.handleApiUpdate(server, emptyList())
                     helper.assertTrue(false, "waiting for removal dispatch to settle")
                 }
                 else -> {
-                    helper.assertFalse(server.packRepository.selectedIds.contains(expectedPackId), "pack should be deselected after removal")
-                    helper.assertFalse(Files.exists(packFile), "pack file should be deleted after removal")
+                    helper.assertFalse(server.packRepository.selectedIds.contains(expectedPackIdV2Url2), "pack should be deselected after removal")
+                    helper.assertFalse(Files.exists(packFileV2Url2), "pack file should be deleted after removal")
                     httpServer.stop(0)
+                    httpServer2.stop(0)
                     ApiBalegoConfig.remoteDatapackSync = prevEnabled
                     ApiBalegoConfig.remoteDatapackAllowExternalUrl = prevExternal
                     ApiBalegoConfig.dataSyncUrl = prevSyncUrl

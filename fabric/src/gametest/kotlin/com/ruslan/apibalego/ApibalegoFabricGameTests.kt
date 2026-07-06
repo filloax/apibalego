@@ -45,6 +45,9 @@ object ApibalegoFabricGameTests {
     @GameTest
     fun datapackHandlerSkipsWhenDisabled(helper: GameTestHelper) = ApibalegoGameTests.datapackHandlerSkipsWhenDisabled(helper)
 
-    @GameTest
+    // generous budget: this test chains 4 sequential download+reload+select round trips
+    // (install, version bump, URL-only change, removal), which can run long under a loaded
+    // gametest server ("Can't keep up!" throttling)
+    @GameTest(maxTicks = 1000)
     fun datapackHandlerFullLifecycle(helper: GameTestHelper) = ApibalegoGameTests.datapackHandlerFullLifecycle(helper)
 }

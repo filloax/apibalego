@@ -23,6 +23,8 @@ version = "$modVersion-$minecraftVersion$versionSuffix-fabric"
 if (includeDeps) println("Including dependencies for test mode")
 
 loom {
+	mixin.defaultRefmapName = "${modid}.refmap.json"
+
 	mods {
 		register(modid) {
 			sourceSet(sourceSets.main.get())
@@ -53,6 +55,7 @@ fabricApi {
         createSourceSet = true
         modId = "${modid}_test"
         enableGameTests = true
+        enableClientGameTests = true
         eula = true
     }
 }

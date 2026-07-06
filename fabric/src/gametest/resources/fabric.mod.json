@@ -15,6 +15,20 @@
         "value": "com.ruslan.apibalego.ApibalegoFabricGameTests",
         "adapter": "kotlin"
       }
+    ],
+    "fabric-client-gametest": [
+      {
+        "value": "com.ruslan.apibalego.MenuMessageClientGameTest",
+        "adapter": "kotlin"
+      },
+      {
+        "value": "com.ruslan.apibalego.ToastClientGameTest",
+        "adapter": "kotlin"
+      },
+      {
+        "value": "com.ruslan.apibalego.ResourcePackClientGameTest",
+        "adapter": "kotlin"
+      }
     ]
   }
 }

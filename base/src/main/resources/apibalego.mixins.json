@@ -1,0 +1,14 @@
+{
+  "required": true,
+  "package": "com.ruslan.apibalego.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+  ],
+  "client": [
+    "client.SplashManagerMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "apibalego.refmap.json"
+}

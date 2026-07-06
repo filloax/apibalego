@@ -1,7 +1,10 @@
 package com.ruslan.apibalego
 
+import com.ruslan.apibalego.client.http.BuiltinClientApiHandlers
 import com.ruslan.apibalego.client.http.ClientDataSync
 import com.ruslan.apibalego.client.http.ClientGamemasterApi
+import com.ruslan.apibalego.client.socket.BuiltinClientLiveUpdateEvents
+import com.ruslan.apibalego.client.socket.ClientLiveUpdatesConnection
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
@@ -62,8 +65,11 @@ abstract class Apibalego {
             if (clientInitialized) return
             clientInitialized = true
 
+            BuiltinClientApiHandlers.registerAll()
+            BuiltinClientLiveUpdateEvents.registerAll()
             ClientGamemasterApi.init()
             ClientDataSync.start()
+            ClientLiveUpdatesConnection.clientStart()
 
             LOGGER.info("Initialized client!")
         }

@@ -64,4 +64,11 @@ public final class ApiBalegoConfig {
     @ConfigEntry(id = "clientDataSyncReloadTime", translation = T_PREF + "clientDataSyncReloadTime.name")
     @Comment(value = "How much time (in minutes) must pass between each client query. Must be at least 10 seconds.", translation = T_PREF + "clientDataSyncReloadTime.comment")
     public static float clientDataSyncReloadTime = 5f;
+
+    @ConfigEntry(id = "clientResourcePackSync", translation = T_PREF + "clientResourcePackSync.name")
+    @Comment(value = "Allow the gamemaster to download and enable/disable resource packs on the client.", translation = T_PREF + "clientResourcePackSync.comment")
+    public static boolean clientResourcePackSync = false;
+    @ConfigEntry(id = "clientResourcePackAllowExternalUrl", translation = T_PREF + "clientResourcePackAllowExternalUrl.name")
+    @Comment(value = "If disabled, resource pack download URLs must be on the same origin as the client data sync URL. Enable to allow downloading from any URL.", translation = T_PREF + "clientResourcePackAllowExternalUrl.comment")
+    public static boolean clientResourcePackAllowExternalUrl = false;
 }

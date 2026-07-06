@@ -74,7 +74,8 @@ object ClientDataSync {
         httpFetcher.stop()
     }
 
-    private fun sync() {
+    /** Force an immediate poll of every subscription, bypassing the schedule (e.g. a live-update reload push). */
+    fun sync() {
         subscriptions.forEach { (name, subscription) ->
             if (subscription.url.isBlank()) return@forEach
             val conn = httpFetcher.makeConnection(subscription.url, subscriptionHeaders[name] ?: emptyMap())

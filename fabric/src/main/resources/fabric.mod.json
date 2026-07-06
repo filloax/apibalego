@@ -15,6 +15,9 @@
   "license": "MIT",
   "icon": "assets/apibalego/icon.png",
   "environment": "*",
+  "mixins": [
+    "apibalego.mixins.json"
+  ],
   "entrypoints": {
     "main": [
       {

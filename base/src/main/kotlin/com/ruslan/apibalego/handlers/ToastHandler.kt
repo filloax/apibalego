@@ -41,8 +41,18 @@ object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
         fun toPacket() = CustomToastPacket(
             title,
             message,
-            item?.defaultInstance ?: ItemStack.EMPTY
+            item?.safeDefaultInstance() ?: ItemStack.EMPTY
         )
+    }
+
+    /**
+     * Item registry holders can throw "Components not bound yet" if resolved too early
+     */
+    private fun Item.safeDefaultInstance(): ItemStack? = try {
+        defaultInstance
+    } catch (e: Exception) {
+        Apibalego.LOGGER.error("Failed to build ItemStack for toast item '$this': ${e.message}")
+        null
     }
 
     override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<ToastData>>) {
