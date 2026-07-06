@@ -16,12 +16,24 @@ private val json = Json {
 //        isLenient = true
 }
 
-class ApiEntryType<T : Any> internal constructor(
+abstract class AbstractApiEntryType<T : Any> (
     val key: Identifier,
-    // if null, type has no extra info
     val detailsDeserializer: KSerializer<T>?,
-    val handler: ApiEntryHandler<T>,
 ) {
+    protected fun parseDetails(raw: IApiEntryRaw) = detailsDeserializer?.let { deserializer ->
+        raw.details?.takeIf { it != JsonNull }
+            ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
+    }
+
+    override fun toString() = key.toString()
+}
+
+class ApiEntryType<T : Any> internal constructor(
+    key: Identifier,
+    // if null, type has no extra info
+    detailsDeserializer: KSerializer<T>?,
+    val handler: ApiEntryHandler<T>,
+) : AbstractApiEntryType<T>(key, detailsDeserializer) {
     fun dispatchUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
         handler.handleApiUpdate(server, entries.map { it.resolve(this, parseDetails(it)) })
     }
@@ -29,13 +41,6 @@ class ApiEntryType<T : Any> internal constructor(
     fun dispatchJoin(entries: Collection<ApiEntryRaw>, player: ServerPlayer) {
         handler.handleApiJoin(player, entries.map { it.resolve(this, parseDetails(it)) })
     }
-
-    private fun parseDetails(raw: ApiEntryRaw) = detailsDeserializer?.let { deserializer ->
-        raw.details?.takeIf { it != JsonNull }
-            ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
-    }
-
-    override fun toString() = key.toString()
 }
 
 interface ApiEntryHandler<T : Any> {
@@ -45,6 +50,8 @@ interface ApiEntryHandler<T : Any> {
         // do nothing on join by default
     }
 }
+
+//#region registry
 
 object ApiEntryRegistry {
     private val registry = mutableMapOf<Identifier, ApiEntryType<*>>()
@@ -94,18 +101,32 @@ object ApiEntryRegistry {
     }
 }
 
-class ApiEntryTypeSerializer : KSerializer<ApiEntryType<*>> {
-    override val descriptor = PrimitiveSerialDescriptor("ApiEntryType", PrimitiveKind.STRING)
+class UnknownApiEntryTypeException(key: Identifier) : Exception("Unknown ApiEntryType: $key")
 
-    override fun serialize(encoder: Encoder, value: ApiEntryType<*>) {
+//#endregion
+
+//#region Serializers
+
+abstract class AbstractApiEntryTypeSerializer<T : AbstractApiEntryType<*>>(
+    serialName: String,
+    val lookup: (Identifier) -> T,
+) : KSerializer<T> {
+    override val descriptor = PrimitiveSerialDescriptor(serialName, PrimitiveKind.STRING)
+
+    override fun serialize(encoder: Encoder, value: T) {
         encoder.encodeString(value.key.toString())
     }
 
-    override fun deserialize(decoder: Decoder): ApiEntryType<*> {
+    override fun deserialize(decoder: Decoder): T {
         val keyStr = decoder.decodeString()
         val key = Identifier.parse(keyStr)
-        return ApiEntryRegistry.lookup(key)
+        return lookup(key)
     }
 }
 
-class UnknownApiEntryTypeException(key: Identifier) : Exception("Unknown ApiEntryType: $key")
+class ApiEntryTypeSerializer : AbstractApiEntryTypeSerializer<ApiEntryType<*>>(
+    "ApiEntryType",
+    ApiEntryRegistry::lookup,
+)
+
+//#endregion

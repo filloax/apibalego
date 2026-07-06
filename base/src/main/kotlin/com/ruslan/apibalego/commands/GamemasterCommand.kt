@@ -5,6 +5,7 @@ import com.mojang.brigadier.arguments.StringArgumentType
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
 import com.ruslan.apibalego.http.DataRemoteSync
+import com.ruslan.apibalego.http.GamemasterApi
 import net.minecraft.ChatFormatting
 import net.minecraft.commands.CommandBuildContext
 import net.minecraft.commands.CommandSourceStack
@@ -80,7 +81,7 @@ object GamemasterCommand {
         if (ApiBalegoConfig.webDataSync) {
             source.sendSystemMessage(Component.translatable("apibalego.commands.gmaster.reload_start"))
             try {
-                DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, source.server).thenAccept {
+                DataRemoteSync.doSync(source.server).thenAccept {
                     if (it) {
                         source.sendSuccess(
                             { Component.translatable("apibalego.commands.gmaster.reload_success") }, true)
@@ -120,6 +121,7 @@ object GamemasterCommand {
         }
         ApiBalegoConfig.dataSyncUrl = url
         ApiBalegoConfigHandler.saveConfig()
+        DataRemoteSync.setUrl(GamemasterApi.subscriptionName(), GamemasterApi.syncUrl())
         runReloadHooks(source.server)
         source.sendSuccess({ Component.translatable("apibalego.commands.gmaster.url_set", url).withStyle(ChatFormatting.YELLOW) }, true)
         return 1
@@ -137,6 +139,6 @@ object GamemasterCommand {
 
     private fun runReloadHooks(server: MinecraftServer) {
         onReloadHooks.forEach { it(server) }
-        DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, server)
+        DataRemoteSync.doSync(server)
     }
 }

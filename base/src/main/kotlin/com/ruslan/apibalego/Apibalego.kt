@@ -1,5 +1,7 @@
 package com.ruslan.apibalego
 
+import com.ruslan.apibalego.client.http.ClientDataSync
+import com.ruslan.apibalego.client.http.ClientGamemasterApi
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.DataRemoteSync
@@ -25,6 +27,7 @@ abstract class Apibalego {
         var isNeoforge = false      // set to true in ApiBalegoNeo for custom logic
 
         private var initialized = false
+        private var clientInitialized = false
 
         /**
          * Initialize the mod.
@@ -36,6 +39,8 @@ abstract class Apibalego {
 
             LOGGER.info("Initializing")
 
+            ApiBalegoConfigHandler.initConfig()
+
             BuiltinApiHandlers.registerAll()
             BuiltinLiveUpdateEvents.registerAll()
 
@@ -44,11 +49,23 @@ abstract class Apibalego {
             ApiBalegoPackets.registerPacketsS2C()
             ApiBalegoPackets.registerPacketsC2S()
 
-            ApiBalegoConfigHandler.initConfig()
-
             ApiBalegoModEvents.get().initCallbacks()
 
             LOGGER.info("Initialized!")
+        }
+
+        /**
+         * Initialize the client-only parts of the mod. Call from each loader's client entrypoint,
+         * after [init]. Calling more than once is harmless.
+         */
+        fun initClient() {
+            if (clientInitialized) return
+            clientInitialized = true
+
+            ClientGamemasterApi.init()
+            ClientDataSync.start()
+
+            LOGGER.info("Initialized client!")
         }
     }
 }

@@ -50,4 +50,18 @@ public final class ApiBalegoConfig {
     @ConfigEntry(id = "remoteDatapackAllowExternalUrl", translation = T_PREF + "remoteDatapackAllowExternalUrl.name")
     @Comment(value = "If disabled, datapack download URLs must be on the same origin as the data sync URL. Enable to allow downloading from any URL.", translation = T_PREF + "remoteDatapackAllowExternalUrl.comment")
     public static boolean remoteDatapackAllowExternalUrl = false;
+
+    @ConfigEntry(id = "clientDataSync", translation = T_PREF + "clientDataSync.name")
+    @Comment(value = "CAREFUL: allows the client to connect to a gamemaster on its own, independent of any joined server (e.g. from the main menu).", translation = T_PREF + "clientDataSync.comment")
+    public static boolean clientDataSync = false;
+    @ConfigEntry(id = "clientDataSyncUrl", translation = T_PREF + "clientDataSyncUrl.name")
+    @Comment(value = "Only connect to trusted sources!", translation = T_PREF + "clientDataSyncUrl.comment")
+    public static String clientDataSyncUrl = "http://localhost:5000";
+    @ConfigEntry(id = "clientDataSyncEndpoint", translation = T_PREF + "clientDataSyncEndpoint.name")
+    public static String clientDataSyncEndpoint = "client_data";
+    @ConfigEntry(id = "clientDataSyncApiKey", translation = T_PREF + "clientDataSyncApiKey.name")
+    public static String clientDataSyncApiKey = "";
+    @ConfigEntry(id = "clientDataSyncReloadTime", translation = T_PREF + "clientDataSyncReloadTime.name")
+    @Comment(value = "How much time (in minutes) must pass between each client query. Must be at least 10 seconds.", translation = T_PREF + "clientDataSyncReloadTime.comment")
+    public static float clientDataSyncReloadTime = 5f;
 }

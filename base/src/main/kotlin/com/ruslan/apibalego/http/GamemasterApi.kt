@@ -17,10 +17,15 @@ object GamemasterApi {
     private var lastHash: Int? = null
 
     fun init() {
-        DataRemoteSync.endpointParams(ApiBalegoConfig.dataSyncEndpoint).headers["apiKey"] = ApiBalegoConfig.dataSyncApiKey
+        DataRemoteSync.params(ApiBalegoConfig.dataSyncEndpoint).headers["apiKey"] = ApiBalegoConfig.dataSyncApiKey
 
-        DataRemoteSync.subscribe(ApiBalegoConfig.dataSyncEndpoint, ListSerializer(ApiEntryRaw.serializer()), ::handleUpdate)
+        DataRemoteSync.subscribe(ApiBalegoConfig.dataSyncEndpoint, syncUrl(), ListSerializer(ApiEntryRaw.serializer()), ::handleUpdate)
     }
+
+    /** The name used to identify the built-in gamemaster subscription (see [DataRemoteSync.setUrl]). */
+    fun subscriptionName(): String = ApiBalegoConfig.dataSyncEndpoint
+
+    fun syncUrl(): String = "${ApiBalegoConfig.dataSyncUrl}/${ApiBalegoConfig.dataSyncEndpoint}"
 
     object Callbacks {
         fun onPlayerJoin(player: ServerPlayer) {

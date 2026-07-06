@@ -4,7 +4,6 @@ import com.filloax.fxlib.api.platform.ServiceUtil
 import com.filloax.fxlib.platform.ServerEvent
 import com.mojang.brigadier.CommandDispatcher
 import com.ruslan.apibalego.commands.GamemasterCommand
-import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.http.DataRemoteSync
 import com.ruslan.apibalego.http.GamemasterApi
@@ -24,7 +23,7 @@ abstract class ApiBalegoModEvents {
     fun initCallbacks() {
         onServerStarting { server ->
             DataRemoteSync.Callbacks.handleServerAboutToStartEvent(server)
-            DataRemoteSync.doSync(ApiBalegoConfig.dataSyncUrl, server)
+            DataRemoteSync.doSync(server)
             LiveUpdatesConnection.serverStart(server)
         }
         onServerStopping { server ->
@@ -36,7 +35,7 @@ abstract class ApiBalegoModEvents {
             DataRemoteSync.Callbacks.onServerLevel(server, level)
         }
         onStartServerTick { server ->
-            DataRemoteSync.Callbacks.onServerTick(ApiBalegoConfig.dataSyncUrl, server)
+            DataRemoteSync.Callbacks.onServerTick(server)
         }
         onPlayerServerJoin { player ->
             GamemasterApi.Callbacks.onPlayerJoin(player)

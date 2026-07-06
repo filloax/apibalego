@@ -12,19 +12,17 @@ import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
-import java.io.BufferedReader
-import java.io.InputStreamReader
 import java.lang.reflect.Type
 import java.net.HttpURLConnection
-import java.net.URI
 import java.time.Duration
 import java.time.LocalDateTime
 import java.util.concurrent.*
-import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * Handles periodic requests to a specified endpoint (if enabled),
- * with generic type parsed from the response as specified by caller.
+ * Handles periodic requests to a set of subscribed URLs (if enabled), with generic type parsed
+ * from the response as specified by caller. Each subscription is identified by a stable [name]
+ * (used for caching/dedup) independent of its [Subscription.url], so the url can be changed
+ * live (e.g. via `/gmaster url`) without losing cached state.
  */
 object DataRemoteSync {
     var lastSyncSuccessful = false
@@ -43,83 +41,77 @@ object DataRemoteSync {
             field = value
         }
 
-    private val observersByEndpoint = mutableMapOf<String, MutableList<(String, MinecraftServer) -> Unit>>()
-    private val endpointParams = mutableMapOf<String, EndpointParams>()
+    private val subscriptions = mutableMapOf<String, Subscription>()
+    private val subscriptionParams = mutableMapOf<String, SubscriptionParams>()
     private val gson = GsonBuilder().create()
     private val json = Json { ignoreUnknownKeys = true } // Kotlinx's serialization acts better with kotlin non-nullables etc
-    private var requestsService: ExecutorService? = null
+    private val httpFetcher = HttpFetcher("apibalego-requests", Apibalego.LOGGER)
     private var didFirstLoad = mutableMapOf<String, Boolean>()
     private val doOnNextServerStart = LinkedBlockingQueue<(MinecraftServer) -> Unit>()
     private val logger = Apibalego.LOGGER
 
     /**
-     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
-     * parse the request as T.
+     * Subscribe to a URL under the given (stable) name. Will send a GET request to that URL, and
+     * parse the response as T.
      */
-    fun <T: Any>subscribe(endpoint: String, serializer: DeserializationStrategy<T>, callback: (T, MinecraftServer) -> Unit) {
-        subscribeRaw(endpoint) { response, server ->
+    fun <T: Any>subscribe(name: String, url: String, serializer: DeserializationStrategy<T>, callback: (T, MinecraftServer) -> Unit) {
+        subscribeRaw(name, url) { response, server ->
             try {
                 callback(json.decodeFromString(serializer, response), server)
             } catch (e: SerializationException) {
-                logger.error("[$endpoint] JSON* PARSE FAILURE, IS $response", e)
+                logger.error("[$name] JSON* PARSE FAILURE, IS $response", e)
             } catch (e: Exception) {
-                logger.error("[$endpoint] OTHER FAILURE", e)
+                logger.error("[$name] OTHER FAILURE", e)
             }
         }
     }
 
     /**
-     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
-     * parse the request as T.
-     */
-    fun <T>subscribe(endpoint: String, type: Type, callback: (T, MinecraftServer) -> Unit) {
-        subscribeRaw(endpoint) { response, server ->
-            try {
-                callback(gson.fromJson(response, type), server)
-            } catch (e: JsonParseException) {
-                logger.error("[$endpoint] JSON PARSE FAILURE, IS $response", e)
-            } catch (e: Exception) {
-                logger.error("[$endpoint] OTHER FAILURE", e)
-            }
-        }
-    }
-
-    /**
-     * Subscribe to an endpoint (suffix of the URL used in data sync). Will send a GET request to that endpoint, and
+     * Subscribe to a URL under the given (stable) name. Will send a GET request to that URL, and
      * call the callback with the raw response.
      */
-    fun subscribeRaw(endpoint: String, callback: (String, MinecraftServer) -> Unit) {
-        val adjEndpoint = if (endpoint.startsWith("/")) {
-            endpoint.replace(Regex("^/"), "")
-        } else endpoint
-        observersByEndpoint.computeIfAbsent(adjEndpoint) { mutableListOf() }.add(callback)
-    }
-
-    fun endpointParams(endpoint: String): EndpointParams {
-        return endpointParams.computeIfAbsent(endpoint) {EndpointParams()}
+    fun subscribeRaw(name: String, url: String, callback: (String, MinecraftServer) -> Unit) {
+        subscriptions.computeIfAbsent(name) { Subscription(url) }.also { it.url = url }.callbacks.add(callback)
     }
 
     /**
-     * Run data sync on the specified endpoint
-     * @return A completable future that completes when all endpoints do, and is true if all endpoints had a success
+     * Update the url of an existing subscription (e.g. on config change), keeping its cache/dedup
+     * state (keyed by [name]) intact.
      */
-    fun doSync(url: String, server: MinecraftServer): CompletableFuture<Boolean> {
-        if (!ApiBalegoConfig.webDataSync) {
-            return CompletableFuture.completedFuture(false)
+    fun setUrl(name: String, url: String) {
+        val subscription = subscriptions[name]
+        if (subscription == null) {
+            logger.warn("Tried to set url for unknown subscription $name")
+            return
         }
+        subscription.url = url
+    }
 
-        if (url.isBlank()) {
-            logger.warn("Data sync url is empty, won't run")
+    fun params(name: String): SubscriptionParams {
+        return subscriptionParams.computeIfAbsent(name) { SubscriptionParams() }
+    }
+
+    /**
+     * Run data sync on all subscriptions.
+     * @return A completable future that completes when all subscriptions do, and is true if all had a success
+     */
+    fun doSync(server: MinecraftServer): CompletableFuture<Boolean> {
+        if (!ApiBalegoConfig.webDataSync) {
             return CompletableFuture.completedFuture(false)
         }
 
         val updateTime = LocalDateTime.now().also { lastUpdateTime = it }
         val future = CompletableFuture<Boolean>()
         val successes = mutableMapOf<String, Boolean>()
-        observersByEndpoint.forEach { (endpoint, callbacks) ->
-            syncEndpoint(url, endpoint, callbacks, server).thenAccept ta@{ success ->
-                successes[endpoint] = success
-                if (successes.keys.size >= observersByEndpoint.keys.size) {
+        subscriptions.forEach { (name, subscription) ->
+            if (subscription.url.isBlank()) {
+                logger.warn("[$name] Sync url is empty, won't run")
+                successes[name] = false
+                return@forEach
+            }
+            syncSubscription(name, subscription.url, subscription.callbacks, server).thenAccept ta@{ success ->
+                successes[name] = success
+                if (successes.keys.size >= subscriptions.keys.size) {
                     future.complete(successes.values.all{it})
                 }
             }
@@ -133,42 +125,41 @@ object DataRemoteSync {
         }
     }
 
-    private fun syncEndpoint(url: String, endpoint: String, callbacks: List<(String, MinecraftServer) -> Unit>, server: MinecraftServer): CompletableFuture<Boolean> {
-        val params = endpointParams[endpoint] ?: DEFAULT_PARAMS
-        val fullUrl = "$url/$endpoint"
-        val conn = makeConnection(fullUrl, params)
+    private fun syncSubscription(name: String, url: String, callbacks: List<(String, MinecraftServer) -> Unit>, server: MinecraftServer): CompletableFuture<Boolean> {
+        val params = subscriptionParams[name] ?: DEFAULT_PARAMS
+        val conn = makeConnection(url, params)
         val future = CompletableFuture<Boolean>()
         sendRequest(conn).whenComplete { conn2, exception ->
             try {
                 val result = if (exception != null) {
-                    if (endpoint !in didFirstLoad) {
-                        logger.info("[$endpoint] Restoring from server memory after connection error as didn't load the first time yet")
-                        restoreEndpointFromMemory(server, endpoint).thenAccept { savedData ->
-                            onEndpointRestored(callbacks, server, endpoint, savedData)
+                    if (name !in didFirstLoad) {
+                        logger.info("[$name] Restoring from server memory after connection error as didn't load the first time yet")
+                        restoreFromMemory(server, name).thenAccept { savedData ->
+                            onRestored(callbacks, server, name, savedData)
                         }
                     }
-                    logger.error("[$endpoint] ERROR: ${exception.message}")
+                    logger.error("[$name] ERROR: ${exception.message}")
                     false
 
                 } else {
                     val status = conn2.responseCode
                     if (status < 300 && server.isRunning) {
-                        didFirstLoad[endpoint] = true
+                        didFirstLoad[name] = true
                         val content = getResponseContent(conn2)
-                        saveEndpointToMemory(server, endpoint, content)
-                        logger.info("[$endpoint] SUCCESS, STATUS: $status")
+                        saveToMemory(server, name, content)
+                        logger.info("[$name] SUCCESS, STATUS: $status")
                         callbacks.forEach { it(content, server) }
                         true
                     } else if (!server.isRunning) {
-                        logger.error("Data sync $endpoint: server not running, abort...")
+                        logger.error("Data sync $name: server not running, abort...")
                         false
                     } else {
-                        logger.error("[$endpoint] ERROR, STATUS $status\n${getResponseContent(conn2)}")
+                        logger.error("[$name] ERROR, STATUS $status\n${getResponseContent(conn2)}")
 
-                        if (endpoint !in didFirstLoad) {
-                            logger.info("[$endpoint] Restoring from server memory after error as didn't load the first time yet")
-                            restoreEndpointFromMemory(server, endpoint).thenAccept { savedData ->
-                                onEndpointRestored(callbacks, server, endpoint, savedData)
+                        if (name !in didFirstLoad) {
+                            logger.info("[$name] Restoring from server memory after error as didn't load the first time yet")
+                            restoreFromMemory(server, name).thenAccept { savedData ->
+                                onRestored(callbacks, server, name, savedData)
                             }
                         }
                         false
@@ -183,114 +174,69 @@ object DataRemoteSync {
         return future
     }
 
-    private fun makeConnection(url: String, params: EndpointParams = DEFAULT_PARAMS): HttpURLConnection {
-        val conn = URI(url).toURL().openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("Content-Type", "application/json")
-        conn.setRequestProperty("Accept-Charset", "UTF-8")
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        params.headers.forEach {  conn.setRequestProperty(it.key, it.value) }
+    private fun makeConnection(url: String, params: SubscriptionParams = DEFAULT_PARAMS): HttpURLConnection =
+        httpFetcher.makeConnection(url, params.headers)
 
-        return conn
-    }
+    private fun sendRequest(conn: HttpURLConnection): CompletableFuture<HttpURLConnection> =
+        httpFetcher.sendRequest(conn)
 
-    private fun sendRequest(conn: HttpURLConnection): CompletableFuture<HttpURLConnection> {
-        val completableFuture = CompletableFuture<HttpURLConnection>()
-        requestsService?.submit {
-            logger.info("DATA SYNC: CONNECTING VIA ${conn.url}")
-            try {
-                conn.connect()
-                completableFuture.complete(conn)
-                conn.disconnect()
-                logger.info("DATA SYNC: DISCONNECTED FROM ${conn.url}")
-            } catch(e: Exception) {
-                logger.error("DATA SYNC: FAILURE WITH ${conn.url}", e.message)
-                completableFuture.completeExceptionally(e)
-            }
-        } ?: {
-            completableFuture.completeExceptionally(IllegalStateException("Executor service not setup!"))
-        }
-        return completableFuture
-    }
+    private fun getResponseContent(conn: HttpURLConnection): String =
+        httpFetcher.getResponseContent(conn)
 
-    private fun getResponseContent(conn: HttpURLConnection): String {
-        val respReader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-        var inputLine: String?
-        val contentBuffer = StringBuffer()
-        while (respReader.readLine().also { inputLine = it } != null) {
-            contentBuffer.append(inputLine)
-        }
-        respReader.close()
-        return contentBuffer.toString()
-    }
+    private fun setupExecutorService() = httpFetcher.start()
 
-    private fun setupExecutorService() {
-        shutdownExecutorService()
-        val threads = 1
-        requestsService = Executors.newFixedThreadPool(
-            threads,
-            object : ThreadFactory {
-                private val poolNum = AtomicInteger(1)
-                private val threadNum = AtomicInteger(1)
-                private val namePrefix = "apibalego-" + poolNum.getAndIncrement() + "-thread-requests"
-                override fun newThread(r: Runnable): Thread {
-                    return Thread(null, r, namePrefix + threadNum.getAndIncrement())
-                }
-            }
-        )
-    }
+    private fun shutdownExecutorService() = httpFetcher.stop()
 
-    private fun shutdownExecutorService() {
-        requestsService?.shutdown()
-    }
-
-    private fun saveEndpointToMemory(server: MinecraftServer, endpoint: String, response: String) {
+    private fun saveToMemory(server: MinecraftServer, name: String, response: String) {
         val overworld = getOverworldOrNull(server)
         if (overworld != null) {
             val savedData = ApibalegoPersistentData.get(server)
-            savedData.lastEndpointOutputs[endpoint] = response
+            savedData.lastEndpointOutputs[name] = response
             savedData.setDirty()
             logger.info("Updated data sync save data")
         } else if (server.isRunning) {
             doOnNextServerStart.offer {
-                saveEndpointToMemory(server, endpoint, response)
+                saveToMemory(server, name, response)
             }
         }
     }
 
-    private fun restoreEndpointFromMemory(server: MinecraftServer, endpoint: String, existingFuture: CompletableFuture<String?>? = null): CompletableFuture<String?> {
+    private fun restoreFromMemory(server: MinecraftServer, name: String, existingFuture: CompletableFuture<String?>? = null): CompletableFuture<String?> {
         val future = existingFuture ?: CompletableFuture<String?>()
 
         if (!server.isRunning) {
             // abort
-            future.completeExceptionally(IllegalStateException("Restore endpoint abort: Server not running anymore"))
+            future.completeExceptionally(IllegalStateException("Restore subscription abort: Server not running anymore"))
             return future
         }
 
         val overworld = getOverworldOrNull(server)
         if (overworld != null) {
-            future.complete(ApibalegoPersistentData.get(server).lastEndpointOutputs[endpoint])
+            future.complete(ApibalegoPersistentData.get(server).lastEndpointOutputs[name])
         } else {
             doOnNextServerStart.offer {
-                restoreEndpointFromMemory(server, endpoint, future)
+                restoreFromMemory(server, name, future)
             }
         }
 
         return future
     }
 
-    private fun onEndpointRestored(callbacks: List<(String, MinecraftServer) -> Unit>, server: MinecraftServer, endpoint: String, savedData: String?) {
+    private fun onRestored(callbacks: List<(String, MinecraftServer) -> Unit>, server: MinecraftServer, name: String, savedData: String?) {
         if (savedData == null) {
-            logger.warn("[$endpoint] No data for sync in server memory!")
+            logger.warn("[$name] No data for sync in server memory!")
             return
         }
         callbacks.forEach { it(savedData, server) }
-        didFirstLoad[endpoint] = true
-        logger.info("[$endpoint] Restore successful")
+        didFirstLoad[name] = true
+        logger.info("[$name] Restore successful")
     }
 
-    data class EndpointParams(
+    class Subscription(var url: String) {
+        val callbacks = mutableListOf<(String, MinecraftServer) -> Unit>()
+    }
+
+    data class SubscriptionParams(
         val headers: MutableMap<String, String> = mutableMapOf(),
     )
 
@@ -303,7 +249,7 @@ object DataRemoteSync {
         }
     }
 
-    val DEFAULT_PARAMS = EndpointParams()
+    val DEFAULT_PARAMS = SubscriptionParams()
 
     object Callbacks {
         fun handleServerAboutToStartEvent(server: MinecraftServer) {
@@ -322,17 +268,15 @@ object DataRemoteSync {
             }
         }
 
-        fun onServerTick(url: String, server: MinecraftServer) {
+        fun onServerTick(server: MinecraftServer) {
             if (ApiBalegoConfig.webDataSync) {
                 val time = LocalDateTime.now()
                 // check real time to make pause not affect it
                 if (lastUpdateTime?.let{ Duration.between(it, time) >= tickUpdateRealTimeDistance } == true) {
                     logger.info("Data sync: started periodic sync")
-                    doSync(url, server)
+                    doSync(server)
                 }
             }
         }
     }
 }
-
-inline fun <reified T> genericType(): Type = object: TypeToken<T>() {}.type

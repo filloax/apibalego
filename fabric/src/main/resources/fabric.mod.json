@@ -21,6 +21,12 @@
         "value": "com.ruslan.apibalego.ApiBalegoFabric",
         "adapter": "kotlin"
       }
+    ],
+    "client": [
+      {
+        "value": "com.ruslan.apibalego.ApiBalegoFabricClient",
+        "adapter": "kotlin"
+      }
     ]
   },
   "depends": {
