@@ -1,0 +1,95 @@
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'release/**'
+
+jobs:
+  build:
+    if: "contains(github.event.head_commit.message, 'chore: release') && github.event_name != 'pull_request'"
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    outputs:
+      version: ${{ steps.get_version.outputs.VERSION }}
+      java_version: ${{ steps.java_version.outputs.javaVersion }}
+      mc_version: ${{ steps.mc_version.outputs.value }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: "Read Java version"
+      uses: BrycensRanch/read-properties-action@v1.0.4
+      id: java_version
+      with:
+        file: gradle.properties
+        property: javaVersion
+
+    - name: "Read MC version"
+      uses: SebRollen/toml-action@v1.2.0
+      id: mc_version
+      with:
+        file: 'gradle/libs.versions.toml'
+        field: 'versions.minecraft'
+
+    - name: Set up JDK
+      uses: actions/setup-java@v4
+      with:
+        java-version: ${{ steps.java_version.outputs.javaVersion }}
+        distribution: 'temurin'
+        settings-path: ${{ github.workspace }}
+
+    - name: Make Gradle Wrapper Executable
+      if: ${{ runner.os != 'Windows' }}
+      run: chmod +x ./gradlew
+
+    - name: Setup Gradle
+      uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
+
+    - name: Get version from gradle
+      id: get_version
+      run: echo "VERSION=$(./gradlew modVersion | grep VERSION | awk -F'=' '{print $2}')" >> $GITHUB_OUTPUT
+
+    - name: Build with Gradle
+      run: ./gradlew build
+
+    - name: Extract latest changelog
+      run: |
+        awk '/^## /{if(found)exit; found=1} found{print}' CHANGELOG.md > latest_changelog.txt
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts
+        path: |
+          base/build/libs/*.jar
+          fabric/build/libs/*.jar
+          neoforge/build/libs/*.jar
+          latest_changelog.txt
+
+  release-github:
+    name: Release (GitHub)
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+    - name: Download build artifacts
+      uses: actions/download-artifact@v4
+      with:
+        name: build-artifacts
+
+    - name: Publish (GitHub)
+      uses: softprops/action-gh-release@v2
+      with:
+        name: Apibalego ${{ needs.build.outputs.version }} - ${{ needs.build.outputs.mc_version }}
+        body_path: latest_changelog.txt
+        token: ${{ secrets.GITHUB_TOKEN }}
+        make_latest: true
+        tag_name: "${{ needs.build.outputs.version }}-${{ needs.build.outputs.mc_version }}"
+        target_commitish: ${{ env.GITHUB_SHA }}
+        files: |
+          base/build/libs/*.jar
+          fabric/build/libs/*.jar
+          neoforge/build/libs/*.jar
