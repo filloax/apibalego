@@ -24,7 +24,10 @@ class ProjectUtils(
         val useLocalJarFilloaxLib = (project.property("useLocalJarFilloaxLib") as String).toBoolean()
         val alwaysUseLocalMavenFilloaxLib = (project.property("alwaysUseLocalMavenFilloaxLib")!! as String).toBoolean()
 
-        val filloaxlibVersion = libs.findVersion("filloaxlib").get().toString()
+        val filloaxlibVersion = if (loader == "common")
+            libs.findVersion("filloaxlibCommon").map { it.toString() }.orElse(libs.findVersion("filloaxlib").get().toString())
+        else
+            libs.findVersion("filloaxlib").get().toString()
         val useLocalMavenFilloaxLib = alwaysUseLocalMavenFilloaxLib || filloaxlibVersion.contains(Regex("rev\\d+"))
 
         val versionString = if (useLocalJarFilloaxLib)

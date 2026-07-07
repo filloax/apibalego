@@ -11,7 +11,7 @@ jobs:
     permissions:
       contents: read
     outputs:
-      version: ${{ steps.get_version.outputs.VERSION }}
+      version: ${{ steps.get_version.outputs.modVersion }}
       java_version: ${{ steps.java_version.outputs.javaVersion }}
       mc_version: ${{ steps.mc_version.outputs.value }}
 
@@ -32,6 +32,13 @@ jobs:
         file: 'gradle/libs.versions.toml'
         field: 'versions.minecraft'
 
+    - name: "Read mod version"
+      uses: BrycensRanch/read-properties-action@v1.0.4
+      id: get_version
+      with:
+        file: gradle.properties
+        property: modVersion
+
     - name: Set up JDK
       uses: actions/setup-java@v4
       with:
@@ -45,10 +52,6 @@ jobs:
 
     - name: Setup Gradle
       uses: gradle/actions/setup-gradle@417ae3ccd767c252f5661f1ace9f835f9654f2b5
-
-    - name: Get version from gradle
-      id: get_version
-      run: echo "VERSION=$(./gradlew modVersion | grep VERSION | awk -F'=' '{print $2}')" >> $GITHUB_OUTPUT
 
     - name: Build with Gradle
       run: ./gradlew build
@@ -88,7 +91,7 @@ jobs:
         token: ${{ secrets.GITHUB_TOKEN }}
         make_latest: true
         tag_name: "${{ needs.build.outputs.version }}-${{ needs.build.outputs.mc_version }}"
-        target_commitish: ${{ env.GITHUB_SHA }}
+        target_commitish: ${{ github.sha }}
         files: |
           base/build/libs/*.jar
           fabric/build/libs/*.jar
