@@ -39,11 +39,6 @@ class ClientLiveUpdatesConnection internal constructor(
         private fun enabled() = ApiBalegoConfig.liveUpdateService && ApiBalegoConfig.clientDataSync
 
         fun clientStart() {
-            // todo: fix Neoforge compatibility, same underlying issue as the server-side connection
-            if (Apibalego.isNeoforge) {
-                Apibalego.LOGGER.warn("ClientLiveUpdatesConnection is currently not supported on Neoforge, will not start!")
-                return
-            }
             if (activeConnection == null && enabled()) {
                 val conn = ClientLiveUpdatesConnection(Minecraft.getInstance())
                 conn.start()

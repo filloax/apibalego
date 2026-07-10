@@ -45,11 +45,6 @@ class LiveUpdatesConnection internal constructor(
         private fun defaultSocket(uri: URI, options: IO.Options): Socket = IO.socket(uri, options)
 
         fun serverStart(server: MinecraftServer) {
-            // todo: fix Neoforge compatibility
-            if (Apibalego.isNeoforge) {
-                Apibalego.LOGGER.warn("LiveUpdatesConnection is currently not supported on Neoforge, will not start!")
-                return
-            }
             if (activeConnection == null && ApiBalegoConfig.liveUpdateService) {
                 val conn = LiveUpdatesConnection(server)
                 conn.start()
