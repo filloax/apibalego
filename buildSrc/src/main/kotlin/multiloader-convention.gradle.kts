@@ -145,6 +145,7 @@ val endRemasteredVersion = libs.findVersion("endremastered").get().toString()
 // Read more about capabilities here: https://docs.gradle.org/current/userguide/component_capabilities.html#sec:declaring-additional-capabilities-for-a-local-component
 listOf("apiElements", "runtimeElements", "sourcesElements"/*, "javadocElements"*/).forEach { variant ->
     configurations.getByName(variant).outgoing {
+        capability("$group:${base.archivesName.get()}-${project.name}:$version")
         capability("$group:${base.archivesName.get()}:$version")
         capability("$group:$modid-${project.name}-${minecraftVersion}:$version")
         capability("$group:$modid:$version")
@@ -230,6 +231,15 @@ tasks.withType<ProcessResources>().configureEach {
 publishing {
     repositories {
         mavenLocal()
+    }
+    
+    publications {
+        val pubName = "${base.archivesName.get()}-${project.name}"
+        register<MavenPublication>(pubName) {
+            artifactId = pubName
+            version = "$modVersion-$minecraftVersion"
+            from(components.findByName("java"))
+        }
     }
 }
 

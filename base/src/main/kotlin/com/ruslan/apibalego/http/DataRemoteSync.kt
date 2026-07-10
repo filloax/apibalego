@@ -1,8 +1,6 @@
 package com.ruslan.apibalego.http
 
 import com.google.gson.GsonBuilder
-import com.google.gson.JsonParseException
-import com.google.gson.reflect.TypeToken
 import com.ruslan.apibalego.Apibalego
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.data.ApibalegoPersistentData
@@ -12,11 +10,10 @@ import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.world.level.Level
-import java.lang.reflect.Type
-import java.net.HttpURLConnection
 import java.time.Duration
 import java.time.LocalDateTime
-import java.util.concurrent.*
+import java.util.concurrent.CompletableFuture
+import java.util.concurrent.LinkedBlockingQueue
 
 /**
  * Handles periodic requests to a set of subscribed URLs (if enabled), with generic type parsed
@@ -127,9 +124,9 @@ object DataRemoteSync {
 
     private fun syncSubscription(name: String, url: String, callbacks: List<(String, MinecraftServer) -> Unit>, server: MinecraftServer): CompletableFuture<Boolean> {
         val params = subscriptionParams[name] ?: DEFAULT_PARAMS
-        val conn = makeConnection(url, params)
+        val request = makeRequest(url, params)
         val future = CompletableFuture<Boolean>()
-        sendRequest(conn).whenComplete { conn2, exception ->
+        httpFetcher.sendRequest(request).whenComplete { response, exception ->
             try {
                 val result = if (exception != null) {
                     if (name !in didFirstLoad) {
@@ -141,11 +138,11 @@ object DataRemoteSync {
                     logger.error("[$name] ERROR: ${exception.message}")
                     false
 
-                } else {
-                    val status = conn2.responseCode
+                } else response.use {
+                    val status = response.code
                     if (status < 300 && server.isRunning) {
                         didFirstLoad[name] = true
-                        val content = getResponseContent(conn2)
+                        val content = response.body?.string() ?: ""
                         saveToMemory(server, name, content)
                         logger.info("[$name] SUCCESS, STATUS: $status")
                         callbacks.forEach { it(content, server) }
@@ -154,7 +151,7 @@ object DataRemoteSync {
                         logger.error("Data sync $name: server not running, abort...")
                         false
                     } else {
-                        logger.error("[$name] ERROR, STATUS $status\n${getResponseContent(conn2)}")
+                        logger.error("[$name] ERROR, STATUS $status\n${response.body?.string() ?: ""}")
 
                         if (name !in didFirstLoad) {
                             logger.info("[$name] Restoring from server memory after error as didn't load the first time yet")
@@ -174,14 +171,8 @@ object DataRemoteSync {
         return future
     }
 
-    private fun makeConnection(url: String, params: SubscriptionParams = DEFAULT_PARAMS): HttpURLConnection =
-        httpFetcher.makeConnection(url, params.headers)
-
-    private fun sendRequest(conn: HttpURLConnection): CompletableFuture<HttpURLConnection> =
-        httpFetcher.sendRequest(conn)
-
-    private fun getResponseContent(conn: HttpURLConnection): String =
-        httpFetcher.getResponseContent(conn)
+    private fun makeRequest(url: String, params: SubscriptionParams = DEFAULT_PARAMS) =
+        HttpFetcher.makeRequest(url, params.headers)
 
     private fun setupExecutorService() = httpFetcher.start()
 

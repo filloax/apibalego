@@ -1,0 +1,15 @@
+{
+  "required": true,
+  "package": "com.ruslan.apibalego.mixin",
+  "compatibilityLevel": "JAVA_17",
+  "mixins": [
+    "PackRepositoryMixin"
+  ],
+  "client": [
+    "client.ClientPackRepositoryMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  },
+  "refmap": "apibalego.refmap.json"
+}

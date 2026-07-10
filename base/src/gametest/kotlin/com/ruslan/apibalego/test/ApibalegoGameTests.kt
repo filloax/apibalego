@@ -5,7 +5,6 @@ import com.filloax.fxlib.api.entity.getPersistData
 import com.ruslan.apibalego.ApiBalegoConstants
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
-import com.ruslan.apibalego.data.ApibalegoPersistentData
 import com.ruslan.apibalego.handlers.RemoteDatapackHandler
 import com.ruslan.apibalego.handlers.RemoteStructuresHandler
 import com.ruslan.apibalego.handlers.ToastHandler
@@ -17,6 +16,7 @@ import com.ruslan.apibalego.http.ID_API_HANDLER_COMMAND
 import com.ruslan.apibalego.http.ID_API_HANDLER_DATAPACK
 import com.ruslan.apibalego.http.ID_API_HANDLER_STRUCTURE
 import com.ruslan.apibalego.http.ID_API_HANDLER_TOAST
+import com.ruslan.apibalego.pack.PreloadPackSync
 import com.ruslan.apibalego.socket.LIVE_EVENT_CMD
 import com.ruslan.apibalego.socket.LIVE_EVENT_RELOAD
 import com.ruslan.apibalego.socket.LIVE_EVENT_TOAST
@@ -32,7 +32,6 @@ import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.world.level.gamerules.GameRules
-import net.minecraft.world.level.storage.LevelResource
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
 import java.nio.file.Files
@@ -392,15 +391,14 @@ object ApibalegoGameTests {
         val prevEnabled = ApiBalegoConfig.remoteDatapackSync
         ApiBalegoConfig.remoteDatapackSync = false
         val entryId = "gt-dp-disabled-${System.nanoTime()}"
+        val url = "http://127.0.0.1:1/unused.zip"
+        val packFile = PreloadPackSync.serverDatapackDir().resolve("apibalego_dp_${entryId}_${datapackIdentity("1", url)}.zip")
 
-        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, "http://127.0.0.1:1/unused.zip")), server)
+        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
 
         helper.runAfterDelay(1) {
             try {
-                helper.assertFalse(
-                    ApibalegoPersistentData.get(server).installedDatapacks.containsKey(entryId),
-                    "Disabled datapack sync must not install anything",
-                )
+                helper.assertFalse(Files.exists(packFile), "Disabled datapack sync must not install anything")
                 helper.succeed()
             } finally {
                 ApiBalegoConfig.remoteDatapackSync = prevEnabled
@@ -443,14 +441,16 @@ object ApibalegoGameTests {
         val url = "http://127.0.0.1:${httpServer.address.port}/pack.zip"
         val url2 = "http://127.0.0.1:${httpServer2.address.port}/pack.zip"
         // filename is identity-derived (version + url hash, see RemoteDatapackHandler) so an
-        // in-place update never overwrites the currently-selected (locked-on-Windows) zip
+        // in-place update never overwrites the currently-selected (locked-on-Windows) zip.
+        // Pack ids are the plain filename (no "file/" prefix) since these come from
+        // ApibalegoRepositorySource, not vanilla's plain FolderRepositorySource.
         val fileNameV1 = "apibalego_dp_${entryId}_${datapackIdentity("1", url)}.zip"
-        val expectedPackIdV1 = "file/$fileNameV1"
+        val expectedPackIdV1 = fileNameV1
         val fileNameV2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url)}.zip"
-        val expectedPackIdV2 = "file/$fileNameV2"
+        val expectedPackIdV2 = fileNameV2
         val fileNameV2Url2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url2)}.zip"
-        val expectedPackIdV2Url2 = "file/$fileNameV2Url2"
-        val dpDir = server.getWorldPath(LevelResource.DATAPACK_DIR)
+        val expectedPackIdV2Url2 = fileNameV2Url2
+        val dpDir = PreloadPackSync.serverDatapackDir()
         val packFileV1 = dpDir.resolve(fileNameV1)
         val packFileV2 = dpDir.resolve(fileNameV2)
         val packFileV2Url2 = dpDir.resolve(fileNameV2Url2)
@@ -473,10 +473,6 @@ object ApibalegoGameTests {
                     helper.assertTrue(
                         server.packRepository.selectedIds.contains(expectedPackIdV1),
                         "Pack '$expectedPackIdV1' should be selected after install",
-                    )
-                    helper.assertTrue(
-                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("1", url),
-                        "installedDatapacks should record the installed identity for '$entryId'",
                     )
                     helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
                     phase.set(2)
@@ -501,10 +497,6 @@ object ApibalegoGameTests {
                             !server.packRepository.selectedIds.contains(expectedPackIdV1),
                         "v2 should replace v1 in the selection",
                     )
-                    helper.assertTrue(
-                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("2", url),
-                        "installedDatapacks should record the bumped identity for '$entryId'",
-                    )
                     helper.assertTrue(requestCount.get() == 2, "version bump should trigger exactly 1 more download, got ${requestCount.get()} total")
                     helper.assertFalse(Files.exists(packFileV1), "old v1 file should be deleted after being retired")
                     phase.set(4)
@@ -518,10 +510,6 @@ object ApibalegoGameTests {
                         server.packRepository.selectedIds.contains(expectedPackIdV2Url2) &&
                             !server.packRepository.selectedIds.contains(expectedPackIdV2),
                         "new URL's pack should replace the old URL's pack in the selection",
-                    )
-                    helper.assertTrue(
-                        ApibalegoPersistentData.get(server).installedDatapacks[entryId] == datapackIdentity("2", url2),
-                        "installedDatapacks should record the new URL's identity for '$entryId'",
                     )
                     helper.assertTrue(requestCount.get() == 3, "URL-only change should trigger exactly 1 more download, got ${requestCount.get()} total")
                     helper.assertFalse(Files.exists(packFileV2), "old (same-version, old-URL) file should be deleted after being retired")

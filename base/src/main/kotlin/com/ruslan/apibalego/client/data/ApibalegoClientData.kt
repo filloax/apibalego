@@ -17,8 +17,6 @@ object ApibalegoClientData {
     @Serializable
     private data class Data(
         val shownToasts: MutableSet<String> = mutableSetOf(),
-        val installedResourcePacks: MutableMap<String, String> = mutableMapOf(),
-        val pendingPackFileDeletions: MutableSet<String> = mutableSetOf(),
     )
 
     private val json = Json {
@@ -46,10 +44,6 @@ object ApibalegoClientData {
 
     /** Ids of toasts already shown to this client, to avoid re-showing on every sync/launch. */
     fun shownToasts(client: Minecraft) = get(client).shownToasts
-    /** Resource pack entry id -> installed version. */
-    fun installedResourcePacks(client: Minecraft) = get(client).installedResourcePacks
-    /** Pack file names whose deletion failed (zip still held open) and must be retried. */
-    fun pendingPackFileDeletions(client: Minecraft) = get(client).pendingPackFileDeletions
 
     @Synchronized
     fun save(client: Minecraft) {

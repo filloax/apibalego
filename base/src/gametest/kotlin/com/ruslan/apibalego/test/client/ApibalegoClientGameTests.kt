@@ -8,6 +8,7 @@ import com.ruslan.apibalego.client.http.ClientApiEntryRegistry
 import com.ruslan.apibalego.client.http.ID_CLIENT_API_HANDLER_MENU_MESSAGE
 import com.ruslan.apibalego.client.http.ID_CLIENT_API_HANDLER_RESOURCEPACK
 import com.ruslan.apibalego.client.http.ID_CLIENT_API_HANDLER_TOAST
+import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.sun.net.httpserver.HttpServer
 import kotlinx.serialization.json.JsonPrimitive
@@ -174,10 +175,12 @@ object ApibalegoClientGameTests {
             val url = "http://127.0.0.1:${httpServer.address.port}/pack.zip"
             val url2 = "http://127.0.0.1:${httpServer2.address.port}/pack.zip"
             // filename is identity-derived (version + url hash, see ClientResourcePackHandler) so
-            // an in-place update never overwrites the currently-selected (locked-on-Windows) zip
+            // an in-place update never overwrites the currently-selected (locked-on-Windows) zip.
+            // Pack ids are the plain filename (no "file/" prefix) since these come from
+            // ApibalegoRepositorySource, not vanilla's plain FolderRepositorySource.
             val fileName = "apibalego_rp_${entryId}_${packIdentity("1", url)}.zip"
-            val packId = "file/$fileName"
-            val packFile = client.resourcePackDirectory.resolve(fileName)
+            val packId = fileName
+            val packFile = PreloadPackSyncClient.clientResourcePackDir().resolve(fileName)
 
             ClientApiEntryRegistry.dispatchUpdate(listOf(packEntry(entryId, url)), client)
             driver.waitTicks(5)
@@ -188,9 +191,6 @@ object ApibalegoClientGameTests {
             // generous timeout: selection change triggers a full client resource reload
             driver.waitFor("pack downloaded and selected", timeoutTicks = 1200) { mc ->
                 Files.exists(packFile) && mc.resourcePackRepository.selectedIds.contains(packId)
-            }
-            check(ApibalegoClientData.installedResourcePacks(client)[entryId] == packIdentity("1", url)) {
-                "installedResourcePacks should record the installed identity for '$entryId'"
             }
             driver.waitFor("selection saved to options") { mc ->
                 mc.options.resourcePacks.contains(packId)
@@ -206,16 +206,13 @@ object ApibalegoClientGameTests {
             // version bump while v1 is still selected: must download to a new file (v1's zip is
             // locked while selected) and retire the old one, not overwrite it in place
             val fileNameV2 = "apibalego_rp_${entryId}_${packIdentity("2", url)}.zip"
-            val packIdV2 = "file/$fileNameV2"
-            val packFileV2 = client.resourcePackDirectory.resolve(fileNameV2)
+            val packIdV2 = fileNameV2
+            val packFileV2 = PreloadPackSyncClient.clientResourcePackDir().resolve(fileNameV2)
             ClientApiEntryRegistry.dispatchUpdate(listOf(packEntry(entryId, url, version = "2")), client)
             driver.waitFor("v2 downloaded and selected in place of v1", timeoutTicks = 1200) { mc ->
                 Files.exists(packFileV2) &&
                     mc.resourcePackRepository.selectedIds.contains(packIdV2) &&
                     !mc.resourcePackRepository.selectedIds.contains(packId)
-            }
-            check(ApibalegoClientData.installedResourcePacks(client)[entryId] == packIdentity("2", url)) {
-                "installedResourcePacks should record the bumped identity for '$entryId'"
             }
             check(requestCount.get() == 2) { "version bump should trigger exactly 1 more download, got ${requestCount.get()} total" }
             driver.waitFor("old v1 file deleted after being retired") { mc ->
@@ -225,16 +222,13 @@ object ApibalegoClientGameTests {
 
             // same version, only the URL changes: must still be detected as a change
             val fileNameV2Url2 = "apibalego_rp_${entryId}_${packIdentity("2", url2)}.zip"
-            val packIdV2Url2 = "file/$fileNameV2Url2"
-            val packFileV2Url2 = client.resourcePackDirectory.resolve(fileNameV2Url2)
+            val packIdV2Url2 = fileNameV2Url2
+            val packFileV2Url2 = PreloadPackSyncClient.clientResourcePackDir().resolve(fileNameV2Url2)
             ClientApiEntryRegistry.dispatchUpdate(listOf(packEntry(entryId, url2, version = "2")), client)
             driver.waitFor("URL-only change downloaded and selected in place of the old URL", timeoutTicks = 1200) { mc ->
                 Files.exists(packFileV2Url2) &&
                     mc.resourcePackRepository.selectedIds.contains(packIdV2Url2) &&
                     !mc.resourcePackRepository.selectedIds.contains(packIdV2)
-            }
-            check(ApibalegoClientData.installedResourcePacks(client)[entryId] == packIdentity("2", url2)) {
-                "installedResourcePacks should record the new URL's identity for '$entryId'"
             }
             check(requestCount.get() == 3) { "URL-only change should trigger exactly 1 more download, got ${requestCount.get()} total" }
             driver.waitFor("old (same-version, old-URL) file deleted after being retired") { mc ->
@@ -242,17 +236,12 @@ object ApibalegoClientGameTests {
                 !Files.exists(packFileV2)
             }
 
-            ClientApiEntryRegistry.dispatchUpdate(emptyList(), client)
-            driver.waitFor("pack deselected after removal", timeoutTicks = 1200) { mc ->
-                !mc.resourcePackRepository.selectedIds.contains(packIdV2Url2)
-            }
-            check(!ApibalegoClientData.installedResourcePacks(client).containsKey(entryId)) {
-                "installedResourcePacks should drop the entry on removal"
-            }
-            // each empty dispatch retries the pending deletion until the reload frees the zip
-            driver.waitFor("pack file deleted after removal", timeoutTicks = 1200) { mc ->
+            // each empty dispatch recomputes "retired" fresh from disk and retries deletion until
+            // the reload frees the zip; once deleted, a follow-up reload actually deselects it
+            // (required packs stay active for as long as their file exists, see reloadThenRetire)
+            driver.waitFor("pack deselected and file deleted after removal", timeoutTicks = 1200) { mc ->
                 ClientApiEntryRegistry.dispatchUpdate(emptyList(), mc)
-                !Files.exists(packFileV2Url2)
+                !mc.resourcePackRepository.selectedIds.contains(packIdV2Url2) && !Files.exists(packFileV2Url2)
             }
         } finally {
             httpServer.stop(0)

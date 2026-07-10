@@ -1,13 +1,15 @@
 package com.ruslan.apibalego.utils
 
 import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.http.HttpFetcher
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.IOException
-import java.net.HttpURLConnection
 import java.net.URI
-import java.net.URLConnection
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.StandardCopyOption
+import java.time.Duration
 import kotlin.io.path.deleteIfExists
 
 /**
@@ -41,31 +43,31 @@ object RemoteDownloadUtils {
 
     fun sanitizeForFileName(s: String): String = s.replace(Regex("[^a-zA-Z0-9_.-]"), "_")
 
+    // pack downloads can be bigger/slower than a manifest fetch, hence the longer timeouts than
+    // HttpFetcher's default
+    private val downloadClient = OkHttpClient.Builder()
+        .connectTimeout(Duration.ofSeconds(10))
+        .readTimeout(Duration.ofSeconds(30))
+        .build()
+
     fun downloadToFile(target: Path, url: String, apiKey: String) {
         Apibalego.LOGGER.info("Downloading ${target.fileName} from $url...")
         val tmp = target.resolveSibling("${target.fileName}.tmp")
-        val conn: URLConnection = URI(url).toURL().openConnection()
-        conn.connectTimeout = 10000
-        conn.readTimeout = 30000
-        if (conn is HttpURLConnection) {
-            conn.requestMethod = "GET"
-            if (apiKey.isNotBlank()) {
-                conn.setRequestProperty("apiKey", apiKey)
+        val headers = if (apiKey.isNotBlank()) mapOf("apiKey" to apiKey) else emptyMap()
+        val request: Request = HttpFetcher.makeRequest(url, headers)
+        downloadClient.newCall(request).execute().use { response ->
+            if (!response.isSuccessful) {
+                throw IOException("HTTP ${response.code}")
             }
-        }
-        conn.connect()
-        try {
-            if (conn is HttpURLConnection && conn.responseCode >= 300) {
-                throw IOException("HTTP ${conn.responseCode}")
+            try {
+                val bytesCopied = (response.body ?: throw IOException("Empty response body")).byteStream().use { input ->
+                    Files.copy(input, tmp, StandardCopyOption.REPLACE_EXISTING)
+                }
+                Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+                Apibalego.LOGGER.info("Downloaded ${target.fileName} ($bytesCopied bytes)")
+            } finally {
+                tmp.deleteIfExists()
             }
-            val bytesCopied = conn.getInputStream().use { input ->
-                Files.copy(input, tmp, StandardCopyOption.REPLACE_EXISTING)
-            }
-            Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-            Apibalego.LOGGER.info("Downloaded ${target.fileName} ($bytesCopied bytes)")
-        } finally {
-            if (conn is HttpURLConnection) conn.disconnect()
-            tmp.deleteIfExists()
         }
     }
 }
