@@ -15,8 +15,10 @@ import java.util.Optional
 import java.util.function.Consumer
 
 /**
- * Scans [packsFolder] for gamemaster-synced packs and always loads them as required (always
- * active, not removable from the pack screen)
+ * Scans [packsFolder] for gamemaster-synced packs.
+ *
+ * Do not make `required` in later dev, or it will lead to
+ * file-in-use errors, this was my first version too
  */
 class ApibalegoRepositorySource(
     private val packsFolder: Path,
@@ -31,7 +33,7 @@ class ApibalegoRepositorySource(
             stream.filter(::isValidPack).forEach { packPath ->
                 val packName = packPath.fileName.toString()
                 val locationInfo = PackLocationInfo(packName, Component.literal(packName), ApibalegoPackSource.INSTANCE, Optional.empty())
-                val selectionConfig = PackSelectionConfig(true, Pack.Position.TOP, false)
+                val selectionConfig = PackSelectionConfig(false, Pack.Position.TOP, false)
                 val pack = Pack.readMetaAndCreate(locationInfo, resourcesSupplier(packPath), packType, selectionConfig)
                 if (pack != null) packAdder.accept(pack)
             }

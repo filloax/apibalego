@@ -10,6 +10,7 @@ import com.ruslan.apibalego.pack.PreloadPackSync
 import com.ruslan.apibalego.utils.RemoteDownloadUtils
 import kotlinx.serialization.Serializable
 import net.minecraft.server.MinecraftServer
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -32,7 +33,10 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
         val version: String = "",
     )
 
-    data class PackCheckResult(val changed: Boolean, val retiredFileNames: List<String>)
+    data class PackCheckResult(val changed: Boolean, val expectedFileNames: Set<String>, val retiredFileNames: List<String>)
+
+    private const val RETIRE_MAX_ATTEMPTS = 5
+    private const val RETIRE_RETRY_DELAY_TICKS = 20
 
     // Applies only after preload, during normal api sync (preload runs earlier)
     override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<DatapackDetails>>) {
@@ -48,13 +52,38 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
         if (!result.changed) return
 
         ScheduledServerTask.schedule(server, 0) {
-            result.retiredFileNames.forEach { fileName -> dir.resolve(fileName).deleteIfExists() }
-
             val repo = server.packRepository
             repo.reload()
+            repo.setSelected(repo.selectedIds - result.retiredFileNames.toSet() + result.expectedFileNames)
             server.reloadResources(repo.selectedIds).thenRun {
                 ApibalegoMod.LOGGER.info("Datapack sync: reloaded resources after gamemaster update")
             }
+
+            deleteRetiredFiles(dir, result.retiredFileNames, server)
+        }
+    }
+
+    /**
+     * Deletes retired pack files, best-effort.
+     */
+    private fun deleteRetiredFiles(dir: Path, fileNames: List<String>, server: MinecraftServer, attempt: Int = 1) {
+        val stillLocked = fileNames.filterNot { fileName ->
+            try {
+                dir.resolve(fileName).deleteIfExists()
+                true
+            } catch (e: IOException) {
+                // may still be in use by OS
+                ApibalegoMod.LOGGER.warn("Could not delete retired datapack file '$fileName' (attempt $attempt): ${e.message}")
+                false
+            }
+        }
+        if (stillLocked.isEmpty()) return
+        if (attempt >= RETIRE_MAX_ATTEMPTS) {
+            ApibalegoMod.LOGGER.warn("Giving up on deleting retired datapack file(s) $stillLocked after $attempt attempts")
+            return
+        }
+        ScheduledServerTask.schedule(server, RETIRE_RETRY_DELAY_TICKS) {
+            deleteRetiredFiles(dir, stillLocked, server, attempt + 1)
         }
     }
 
@@ -96,7 +125,7 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
         }
         if (retiredFileNames.isNotEmpty()) changed = true
 
-        return PackCheckResult(changed, retiredFileNames)
+        return PackCheckResult(changed, expectedFileNames, retiredFileNames)
     }
 
     private fun identity(details: DatapackDetails) = RemoteDownloadUtils.installIdentity(details.version, details.downloadUrl)

@@ -62,7 +62,7 @@ object ApibalegoGameTests {
         ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
         val type = ApiEntryRegistry.lookupRaw(key)
 
-        ApiEntryRegistry.dispatchUpdate(
+        type.dispatchUpdate(
             listOf(ApiEntryRaw(type = type, id = "x", active = true)),
             helper.level.server,
         )
@@ -169,9 +169,12 @@ object ApibalegoGameTests {
         val server = helper.level.server
         val prevEnabled = ApiBalegoConfig.remoteCommandExecution
         ApiBalegoConfig.remoteCommandExecution = true
-        ApiEntryRegistry.dispatchUpdate(
+        // Dispatch straight to the command type (see apiEventDispatchActive) to avoid also
+        // empty-dispatching to every other handler while running concurrently with other gametests.
+        val commandType = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND)
+        commandType.dispatchUpdate(
             listOf(ApiEntryRaw(
-                type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND),
+                type = commandType,
                 details = buildJsonObject { put("command", JsonPrimitive("gamerule keep_inventory true")) },
                 id = "gt-cmd-run-${System.nanoTime()}",
                 active = true,
@@ -316,14 +319,17 @@ object ApibalegoGameTests {
         ApiBalegoConfig.remoteCommandExecution = true
         val entryId = "gt-cmd-idem-${System.nanoTime()}"
         // Use send_command_feedback (default true) to avoid clashing with commandDispatchRunsCommand's keep_inventory
+        val commandType = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND)
         val entry = ApiEntryRaw(
-            type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND),
+            type = commandType,
             details = buildJsonObject { put("command", JsonPrimitive("gamerule send_command_feedback false")) },
             id = entryId,
             active = true,
         )
 
-        ApiEntryRegistry.dispatchUpdate(listOf(entry), server)
+        // Dispatch straight to the command type (see apiEventDispatchActive) to avoid also
+        // empty-dispatching to every other handler while running concurrently with other gametests.
+        commandType.dispatchUpdate(listOf(entry), server)
 
         helper.runAfterDelay(1) {
             helper.assertFalse(
@@ -337,7 +343,7 @@ object ApibalegoGameTests {
                 "manual reset to true failed",
             )
 
-            ApiEntryRegistry.dispatchUpdate(listOf(entry), server)
+            commandType.dispatchUpdate(listOf(entry), server)
             // wait another tick for the second dispatch's runWhenServerStarted callback
             helper.runAfterDelay(1) {
                 try {
