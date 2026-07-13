@@ -59,7 +59,7 @@ object ApibalegoGameTests {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_active")
         ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
-        val type = ApiEntryRegistry.lookup(key)
+        val type = ApiEntryRegistry.lookupRaw(key)
 
         ApiEntryRegistry.dispatchUpdate(
             listOf(ApiEntryRaw(type = type, id = "x", active = true)),
@@ -81,7 +81,7 @@ object ApibalegoGameTests {
         val absentKey = Identifier.fromNamespaceAndPath("gametest", "dispatch_full_absent")
         ApiEntryRegistry.registerSimple(presentKey, { _, _ -> })
         ApiEntryRegistry.registerSimple(absentKey, { _, entries -> calledWithSize.set(entries.size) })
-        val presentType = ApiEntryRegistry.lookup(presentKey)
+        val presentType = ApiEntryRegistry.lookupRaw(presentKey)
 
         ApiEntryRegistry.dispatchUpdate(
             listOf(ApiEntryRaw(type = presentType, id = "x", active = true)),
@@ -109,7 +109,7 @@ object ApibalegoGameTests {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "join_active")
         ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
-        val type = ApiEntryRegistry.lookup(key)
+        val type = ApiEntryRegistry.lookupRaw(key)
 
         val entries = listOf(ApiEntryRaw(type = type, id = "x", active = true))
         @Suppress("DEPRECATION")
@@ -126,7 +126,7 @@ object ApibalegoGameTests {
         val counter = AtomicInteger(0)
         val key = Identifier.fromNamespaceAndPath("gametest", "join_inactive")
         ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
-        val type = ApiEntryRegistry.lookup(key)
+        val type = ApiEntryRegistry.lookupRaw(key)
 
         val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
         @Suppress("DEPRECATION")
@@ -146,7 +146,7 @@ object ApibalegoGameTests {
         val entryId = "gt-toast-seen-${System.nanoTime()}"
         val toast = ToastHandler.ToastData(title = Component.literal("Test Toast"))
         @Suppress("UNCHECKED_CAST")
-        val type: ApiEntryType<ToastHandler.ToastData> = ApiEntryRegistry.lookup(ID_API_HANDLER_TOAST)
+        val type: ApiEntryType<ToastHandler.ToastData> = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_TOAST)
             as ApiEntryType<ToastHandler.ToastData>
         val entry = ApiEntry(
             type = type,
@@ -170,7 +170,7 @@ object ApibalegoGameTests {
         ApiBalegoConfig.remoteCommandExecution = true
         ApiEntryRegistry.dispatchUpdate(
             listOf(ApiEntryRaw(
-                type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
+                type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND),
                 details = buildJsonObject { put("command", JsonPrimitive("gamerule keep_inventory true")) },
                 id = "gt-cmd-run-${System.nanoTime()}",
                 active = true,
@@ -199,7 +199,7 @@ object ApibalegoGameTests {
         pos: BlockPos = BlockPos.ZERO,
         active: Boolean = true,
     ) = ApiEntry(
-        type = ApiEntryRegistry.lookup(ID_API_HANDLER_STRUCTURE)
+        type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_STRUCTURE)
             as ApiEntryType<RemoteStructuresHandler.RemoteStructureSpawnData>,
         details = RemoteStructuresHandler.RemoteStructureSpawnData(structureId, pos),
         id = id,
@@ -316,7 +316,7 @@ object ApibalegoGameTests {
         val entryId = "gt-cmd-idem-${System.nanoTime()}"
         // Use send_command_feedback (default true) to avoid clashing with commandDispatchRunsCommand's keep_inventory
         val entry = ApiEntryRaw(
-            type = ApiEntryRegistry.lookup(ID_API_HANDLER_COMMAND),
+            type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND),
             details = buildJsonObject { put("command", JsonPrimitive("gamerule send_command_feedback false")) },
             id = entryId,
             active = true,
@@ -354,7 +354,7 @@ object ApibalegoGameTests {
     }
 
     private fun makeDatapackEntry(id: String, downloadUrl: String, version: String = "1", active: Boolean = true) = ApiEntryRaw(
-        type = ApiEntryRegistry.lookup(ID_API_HANDLER_DATAPACK),
+        type = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_DATAPACK),
         details = buildJsonObject {
             put("downloadUrl", JsonPrimitive(downloadUrl))
             put("version", JsonPrimitive(version))
