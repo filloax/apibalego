@@ -17,10 +17,6 @@ import com.ruslan.apibalego.http.ID_API_HANDLER_DATAPACK
 import com.ruslan.apibalego.http.ID_API_HANDLER_STRUCTURE
 import com.ruslan.apibalego.http.ID_API_HANDLER_TOAST
 import com.ruslan.apibalego.pack.PreloadPackSync
-import com.ruslan.apibalego.socket.LIVE_EVENT_CMD
-import com.ruslan.apibalego.socket.LIVE_EVENT_RELOAD
-import com.ruslan.apibalego.socket.LIVE_EVENT_TOAST
-import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import com.sun.net.httpserver.HttpServer
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -29,6 +25,7 @@ import net.minecraft.core.SectionPos
 import net.minecraft.core.registries.Registries
 import net.minecraft.world.level.ChunkPos
 import net.minecraft.gametest.framework.GameTestHelper
+import net.minecraft.gametest.framework.GameTestSequence
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
 import net.minecraft.server.MinecraftServer
@@ -42,106 +39,18 @@ import java.util.zip.ZipOutputStream
 import kotlin.jvm.optionals.getOrNull
 
 /**
- * Loader-agnostic gametest bodies. Each is a `Consumer<GameTestHelper>`-style function that
- * runs inside a server game environment and calls [GameTestHelper.succeed] on success.
+ * Loader-agnostic gametest body. Runs inside a server game environment and calls
+ * [GameTestHelper.succeed] on success (via the sequence built by [combinedHandlerLifecycleTest]).
  *
- * The Fabric and NeoForge modules each register these with their loader's gametest system.
- * Tests are ran in an empty structure as they use the API which isn't related to worldgen.
+ * The Fabric and NeoForge modules each register this with their loader's gametest system.
+ * Runs in an empty structure as it uses the API which isn't related to worldgen.
+ *
+ * Pure dispatch/registry logic (no real file, network, or world I/O) lives instead as plain
+ * JUnit unit tests under base/src/test - see ApibalegoDispatchTest.kt.
  */
 object ApibalegoGameTests {
-    fun configLoaded(helper: GameTestHelper) {
-        helper.assertTrue(ApiBalegoConfigHandler.config != null, "ApiBalegoConfig was not loaded")
-        helper.assertTrue(ApiBalegoConfig.dataSyncUrl.isNotBlank(), "dataSyncUrl default missing")
-        helper.succeed()
-    }
-
-    /** A registered api-entry handler is invoked when dispatched. */
-    fun apiEventDispatchActive(helper: GameTestHelper) {
-        val counter = AtomicInteger(0)
-        val key = Identifier.fromNamespaceAndPath("gametest", "dispatch_active")
-        ApiEntryRegistry.registerSimple(key, { _, _ -> counter.incrementAndGet() }, { _, _ -> })
-        val type = ApiEntryRegistry.lookupRaw(key)
-
-        type.dispatchUpdate(
-            listOf(ApiEntryRaw(type = type, id = "x", active = true)),
-            helper.level.server,
-        )
-
-        helper.assertTrue(counter.get() == 1, "Handler should run exactly once, ran ${counter.get()}")
-        helper.succeed()
-    }
-
-    /**
-     * dispatchFullUpdate must still invoke a registered type's handler with an empty list when
-     * that type has no entries in the given batch, so stateful handlers (datapack, structure)
-     * see "removed" rather than simply not being called at all.
-     */
-    fun apiEventDispatchHitsAbsentType(helper: GameTestHelper) {
-        val calledWithSize = AtomicInteger(-1)
-        val presentKey = Identifier.fromNamespaceAndPath("gametest", "dispatch_full_present")
-        val absentKey = Identifier.fromNamespaceAndPath("gametest", "dispatch_full_absent")
-        ApiEntryRegistry.registerSimple(presentKey, { _, _ -> })
-        ApiEntryRegistry.registerSimple(absentKey, { _, entries -> calledWithSize.set(entries.size) })
-        val presentType = ApiEntryRegistry.lookupRaw(presentKey)
-
-        ApiEntryRegistry.dispatchUpdate(
-            listOf(ApiEntryRaw(type = presentType, id = "x", active = true)),
-            helper.level.server,
-        )
-
-        helper.assertTrue(
-            calledWithSize.get() == 0,
-            "Handler for a type absent from the full-update entries should still run, with an empty list (got ${calledWithSize.get()})",
-        )
-        helper.succeed()
-    }
-
-    /** The built-in live-update handlers are registered. */
-    fun liveUpdatesBuiltinsRegistered(helper: GameTestHelper) {
-        val keys = LiveUpdatesEventRegistry.all().keys
-        listOf(LIVE_EVENT_RELOAD, LIVE_EVENT_TOAST, LIVE_EVENT_CMD).forEach {
-            helper.assertTrue(it in keys, "Built-in live update handler '$it' not registered (have $keys)")
-        }
-        helper.succeed()
-    }
-
-    /** Active join entries are dispatched to join handlers, once per player. */
-    fun dispatchJoinActive(helper: GameTestHelper) {
-        val counter = AtomicInteger(0)
-        val key = Identifier.fromNamespaceAndPath("gametest", "join_active")
-        ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
-        val type = ApiEntryRegistry.lookupRaw(key)
-
-        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = true))
-        @Suppress("DEPRECATION")
-        ApiEntryRegistry.dispatchJoin(entries, helper.makeMockServerPlayerInLevelAlt())
-        @Suppress("DEPRECATION")
-        ApiEntryRegistry.dispatchJoin(entries, helper.makeMockServerPlayerInLevelAlt())
-
-        helper.assertTrue(counter.get() == 2, "Join handler should run once per player (2), ran ${counter.get()}")
-        helper.succeed()
-    }
-
-    /** Inactive join entries filtered by the caller before dispatch are not sent to handlers. */
-    fun dispatchJoinInactiveSkipped(helper: GameTestHelper) {
-        val counter = AtomicInteger(0)
-        val key = Identifier.fromNamespaceAndPath("gametest", "join_inactive")
-        ApiEntryRegistry.registerSimple(key, { _, _ -> }, { _, _ -> counter.incrementAndGet() })
-        val type = ApiEntryRegistry.lookupRaw(key)
-
-        val entries = listOf(ApiEntryRaw(type = type, id = "x", active = false))
-        @Suppress("DEPRECATION")
-        // Filtering inactive is caller responsibility (mirrors GamemasterApi.Callbacks.onPlayerJoin)
-        ApiEntryRegistry.dispatchJoin(entries.filter { it.active }, helper.makeMockServerPlayerInLevelAlt())
-
-        helper.assertTrue(counter.get() == 0, "Inactive join entry must not be dispatched")
-        helper.succeed()
-    }
-
-    // TODO: live update works test
-
-    /** Toast join handler marks the entry id as seen in player persistent data. */
-    fun toastJoinMarksAsSeen(helper: GameTestHelper) {
+    /** Marks the entry id as seen in the joining player's persistent data. */
+    private fun toastJoinStep(helper: GameTestHelper, sequence: GameTestSequence): GameTestSequence {
         @Suppress("DEPRECATION")
         val player = helper.makeMockServerPlayerInLevelAlt()
         val entryId = "gt-toast-seen-${System.nanoTime()}"
@@ -149,29 +58,27 @@ object ApibalegoGameTests {
         @Suppress("UNCHECKED_CAST")
         val type: ApiEntryType<ToastHandler.ToastData> = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_TOAST)
             as ApiEntryType<ToastHandler.ToastData>
-        val entry = ApiEntry(
-            type = type,
-            details = toast,
-            id = entryId,
-            active = true,
-        )
+        val entry = ApiEntry(type = type, details = toast, id = entryId, active = true)
 
         ToastHandler.handleApiJoin(player, listOf(entry))
 
-        val memory = player.getPersistData().getCompound(ApiBalegoConstants.CUSTOM_TOAST_MEMORY).get()
-        val key = toast.title.string + entryId
-        helper.assertTrue(memory.contains(key), "toast entry not marked as seen in player memory")
-        helper.succeed()
+        return sequence.thenExecute {
+            val memory = player.getPersistData().getCompound(ApiBalegoConstants.CUSTOM_TOAST_MEMORY).get()
+            val key = toast.title.string + entryId
+            helper.assertTrue(memory.contains(key), "toast entry not marked as seen in player memory")
+        }
     }
 
-    /** Command entry dispatch executes the underlying command on the server. */
-    fun commandDispatchRunsCommand(helper: GameTestHelper) {
+    /**
+     * Command entry dispatch executes the underlying command on the server, and re-dispatching
+     * the same entry id doesn't run it again.
+     */
+    private fun commandDispatchStep(helper: GameTestHelper, sequence: GameTestSequence): GameTestSequence {
         val server = helper.level.server
         val prevEnabled = ApiBalegoConfig.remoteCommandExecution
         ApiBalegoConfig.remoteCommandExecution = true
-        // Dispatch straight to the command type (see apiEventDispatchActive) to avoid also
-        // empty-dispatching to every other handler while running concurrently with other gametests.
         val commandType = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND)
+
         commandType.dispatchUpdate(
             listOf(ApiEntryRaw(
                 type = commandType,
@@ -181,19 +88,47 @@ object ApibalegoGameTests {
             )),
             server,
         )
-        // EventUtil.runWhenServerStarted fires on the next tick in gametests
-        helper.runAfterDelay(1) {
-            try {
+
+        // Use send_command_feedback (default true) to avoid clashing with the run-command check's keep_inventory
+        val idemEntry = ApiEntryRaw(
+            type = commandType,
+            details = buildJsonObject { put("command", JsonPrimitive("gamerule send_command_feedback false")) },
+            id = "gt-cmd-idem-${System.nanoTime()}",
+            active = true,
+        )
+
+        // EventUtil.runWhenServerStarted fires on the next tick in gametests, hence the 1-tick gaps
+        return sequence
+            .thenExecuteAfter(1) {
                 helper.assertTrue(
                     helper.level.gameRules.get(GameRules.KEEP_INVENTORY),
                     "command did not run (keepInventory not set to true)",
                 )
-                helper.succeed()
-            } finally {
                 server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule keep_inventory false")
+
+                commandType.dispatchUpdate(listOf(idemEntry), server)
+            }
+            .thenExecuteAfter(1) {
+                helper.assertFalse(
+                    helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                    "first dispatch should set send_command_feedback false",
+                )
+                server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
+                helper.assertTrue(
+                    helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                    "manual reset to true failed",
+                )
+
+                commandType.dispatchUpdate(listOf(idemEntry), server)
+            }
+            .thenExecuteAfter(1) {
+                helper.assertTrue(
+                    helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
+                    "second dispatch with same id must be skipped (idempotent)",
+                )
+                server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
                 ApiBalegoConfig.remoteCommandExecution = prevEnabled
             }
-        }
     }
 
     @Suppress("UNCHECKED_CAST")
@@ -211,28 +146,19 @@ object ApibalegoGameTests {
     )
 
     /**
-     * Combined lifecycle test for [RemoteStructuresHandler]: an inactive entry is skipped, an entry
+     * Combined lifecycle check for [RemoteStructuresHandler]: an inactive entry is skipped, an entry
      * pointing at a non-existent structure is skipped, then a valid entry populates the handler map,
      * hands off to FxLib's queue, and the structure appears in the vanilla StructureManager (via
      * FxLib's mixin). A subsequent empty re-dispatch clears the map.
      *
-     * Run as a single sequential test rather than several concurrent ones: handleApiUpdate clears
-     * its full spawn map on every dispatch (mirrors GamemasterApi always sending a complete snapshot
-     * each poll), so separate concurrently-running gametests sharing this handler's static state
-     * would wipe out each other's entries mid-test — same issue [datapackHandlerFullLifecycle]
-     * documents for the datapack handler.
-     *
      * FxLib has two async hops before placement: [EventUtil.runWhenServerStarted] then a
-     * [ScheduledServerTask]. Under the gametest server's load (many tests/mock players spawning
-     * in the same batch can push it several ticks behind — "Can't keep up!"), those hops don't
-     * reliably land within a fixed tick count. So every eventual condition below is checked via
-     * [GameTestSequence.thenWaitUntil], which retries every tick until it stops throwing, rather
-     * than via a fixed [GameTestHelper.runAfterDelay] that assumes a specific number of ticks.
-     * The two negative/invariant checks (inactive and unknown-structure entries never appearing)
-     * don't have this problem since they'd hold on any tick, so a short [thenExecuteAfter] gap is
-     * enough there — it's just spacing out the three dispatches, not waiting on a result.
+     * [ScheduledServerTask]. Under gametest server load those hops don't reliably land within a
+     * fixed tick count, so every eventual condition below is checked via [GameTestSequence.thenWaitUntil],
+     * which retries every tick until it stops throwing, rather than a fixed-delay wait. The two
+     * negative/invariant checks (inactive and unknown-structure entries never appearing) don't have
+     * this problem since they'd hold on any tick, so a short gap between dispatches is enough there.
      */
-    fun structureHandlerGeneralTest(helper: GameTestHelper) {
+    private fun structureHandlerStep(helper: GameTestHelper, sequence: GameTestSequence): GameTestSequence {
         val server = helper.level.server
         val bogusId = Identifier.fromNamespaceAndPath("gametest", "nonexistent_structure")
         val validStructId = Identifier.fromNamespaceAndPath("minecraft", "igloo")
@@ -259,7 +185,7 @@ object ApibalegoGameTests {
             listOf(makeStructureEntry(inactiveEntryId, validStructId, active = false)),
         )
 
-        helper.startSequence()
+        return sequence
             .thenExecuteAfter(2) {
                 helper.assertFalse(
                     RemoteStructuresHandler.STRUCTS_TO_SPAWN_BY_ID.containsKey(inactiveSpawnKey),
@@ -309,55 +235,6 @@ object ApibalegoGameTests {
                     "Spawn map must not contain entry after re-dispatch with no entries",
                 )
             }
-            .thenSucceed()
-    }
-
-    /** Command entry with the same id is not executed more than once. */
-    fun commandDispatchIdempotent(helper: GameTestHelper) {
-        val server = helper.level.server
-        val prevEnabled = ApiBalegoConfig.remoteCommandExecution
-        ApiBalegoConfig.remoteCommandExecution = true
-        val entryId = "gt-cmd-idem-${System.nanoTime()}"
-        // Use send_command_feedback (default true) to avoid clashing with commandDispatchRunsCommand's keep_inventory
-        val commandType = ApiEntryRegistry.lookupRaw(ID_API_HANDLER_COMMAND)
-        val entry = ApiEntryRaw(
-            type = commandType,
-            details = buildJsonObject { put("command", JsonPrimitive("gamerule send_command_feedback false")) },
-            id = entryId,
-            active = true,
-        )
-
-        // Dispatch straight to the command type (see apiEventDispatchActive) to avoid also
-        // empty-dispatching to every other handler while running concurrently with other gametests.
-        commandType.dispatchUpdate(listOf(entry), server)
-
-        helper.runAfterDelay(1) {
-            helper.assertFalse(
-                helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
-                "first dispatch should set send_command_feedback false",
-            )
-
-            server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
-            helper.assertTrue(
-                helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
-                "manual reset to true failed",
-            )
-
-            commandType.dispatchUpdate(listOf(entry), server)
-            // wait another tick for the second dispatch's runWhenServerStarted callback
-            helper.runAfterDelay(1) {
-                try {
-                    helper.assertTrue(
-                        helper.level.gameRules.get(GameRules.SEND_COMMAND_FEEDBACK),
-                        "second dispatch with same id must be skipped (idempotent)",
-                    )
-                    helper.succeed()
-                } finally {
-                    server.commands.performPrefixedCommand(server.createCommandSourceStack(), "gamerule send_command_feedback true")
-                    ApiBalegoConfig.remoteCommandExecution = prevEnabled
-                }
-            }
-        }
     }
 
     private fun makeDatapackEntry(id: String, downloadUrl: String, version: String = "1", active: Boolean = true) = ApiEntryRaw(
@@ -392,61 +269,39 @@ object ApibalegoGameTests {
         return server
     }
 
-    /** Datapack sync is a no-op when disabled via config. */
-    fun datapackHandlerSkipsWhenDisabled(helper: GameTestHelper) {
-        val server = helper.level.server
-        val prevEnabled = ApiBalegoConfig.remoteDatapackSync
-        ApiBalegoConfig.remoteDatapackSync = false
-        val entryId = "gt-dp-disabled-${System.nanoTime()}"
-        val url = "http://127.0.0.1:1/unused.zip"
-        val packFile = PreloadPackSync.serverDatapackDir().resolve("apibalego_dp_${entryId}_${datapackIdentity("1", url)}.zip")
-
-        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
-
-        helper.runAfterDelay(1) {
-            try {
-                helper.assertFalse(Files.exists(packFile), "Disabled datapack sync must not install anything")
-                helper.succeed()
-            } finally {
-                ApiBalegoConfig.remoteDatapackSync = prevEnabled
-            }
-        }
-    }
-
     private fun datapackIdentity(version: String, downloadUrl: String) = "${version}_${downloadUrl.hashCode()}"
 
     /**
-     * Avoids calling all other types with empty list
+     * Avoids calling all other types with an empty list (see [ApiEntryRegistry.dispatchUpdate]).
      */
     private fun dispatchDatapackUpdate(entries: List<ApiEntryRaw>, server: MinecraftServer) {
         ApiEntryRegistry.lookup<RemoteDatapackHandler.DatapackDetails>(ID_API_HANDLER_DATAPACK).dispatchUpdate(entries, server)
     }
 
     /**
-     * End-to-end lifecycle for a single gamemaster-managed datapack: rejected while external URLs
-     * are disabled and the origin differs -> installed and selected once allowed -> re-dispatching
-     * the same version doesn't re-download -> version bump while selected downloads to a new file
-     * and retires the old one instead of overwriting it (avoiding access denied OS errors) ->
-     * changing the download URL alone (same version) is also detected as a change and swapped the
-     * same way (regression test for a URL rename being silently ignored) -> deselected and deleted
-     * once no longer desired.
-     *
-     * Run as a single sequential test rather than several concurrent ones: RemoteDatapackHandler
-     * diffs its full desired set against previously-installed state on every dispatch (mirrors
-     * GamemasterApi always sending a complete snapshot each poll), so separate concurrently-running
-     * gametests sharing this handler's persistent state would make each other's packs look like
-     * they'd disappeared. `ApiBalegoConfig.remoteDatapackSync` is re-asserted before every dispatch
-     * since it's also touched by the concurrently-running [datapackHandlerSkipsWhenDisabled].
+     * Datapack sync is a no-op while disabled via config, then end-to-end lifecycle for a single
+     * gamemaster-managed datapack once enabled: rejected while external URLs are disabled and the
+     * origin differs -> installed and selected once allowed -> re-dispatching the same version
+     * doesn't re-download -> version bump while selected downloads to a new file and retires the
+     * old one instead of overwriting it (avoiding access denied OS errors) -> changing the download
+     * URL alone (same version) is also detected as a change and swapped the same way (regression
+     * test for a URL rename being silently ignored) -> deselected and deleted once no longer desired.
      */
-    fun datapackHandlerFullLifecycle(helper: GameTestHelper) {
+    private fun datapackHandlerStep(helper: GameTestHelper, sequence: GameTestSequence): GameTestSequence {
         val server = helper.level.server
         val prevEnabled = ApiBalegoConfig.remoteDatapackSync
         val prevExternal = ApiBalegoConfig.remoteDatapackAllowExternalUrl
         val prevSyncUrl = ApiBalegoConfig.dataSyncUrl
-        ApiBalegoConfig.remoteDatapackSync = true
+        ApiBalegoConfig.remoteDatapackSync = false
         ApiBalegoConfig.remoteDatapackAllowExternalUrl = false
-        // Arbitrary origin guaranteed to differ from the download server's port below.
+        // Arbitrary origin guaranteed to differ from the download servers' ports below.
         ApiBalegoConfig.dataSyncUrl = "http://127.0.0.1:1"
+
+        val disabledEntryId = "gt-dp-disabled-${System.nanoTime()}"
+        val disabledUrl = "http://127.0.0.1:1/unused.zip"
+        val disabledPackFile = PreloadPackSync.serverDatapackDir()
+            .resolve("apibalego_dp_${disabledEntryId}_${datapackIdentity("1", disabledUrl)}.zip")
+        dispatchDatapackUpdate(listOf(makeDatapackEntry(disabledEntryId, disabledUrl)), server)
 
         val requestCount = AtomicInteger(0)
         val httpServer = startZipServer(buildDatapackZipBytes(), requestCount)
@@ -459,88 +314,108 @@ object ApibalegoGameTests {
         // Pack ids are the plain filename (no "file/" prefix) since these come from
         // ApibalegoRepositorySource, not vanilla's plain FolderRepositorySource.
         val fileNameV1 = "apibalego_dp_${entryId}_${datapackIdentity("1", url)}.zip"
-        val expectedPackIdV1 = fileNameV1
         val fileNameV2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url)}.zip"
-        val expectedPackIdV2 = fileNameV2
         val fileNameV2Url2 = "apibalego_dp_${entryId}_${datapackIdentity("2", url2)}.zip"
-        val expectedPackIdV2Url2 = fileNameV2Url2
         val dpDir = PreloadPackSync.serverDatapackDir()
         val packFileV1 = dpDir.resolve(fileNameV1)
         val packFileV2 = dpDir.resolve(fileNameV2)
         val packFileV2Url2 = dpDir.resolve(fileNameV2Url2)
-        val phase = AtomicInteger(0)
 
-        dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
-
-        helper.succeedWhen {
-            ApiBalegoConfig.remoteDatapackSync = true
-            when (phase.get()) {
-                0 -> {
-                    helper.assertFalse(Files.exists(packFileV1), "download must be rejected while external URLs are disabled")
-                    phase.set(1)
-                    ApiBalegoConfig.remoteDatapackAllowExternalUrl = true
-                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
-                    helper.assertTrue(false, "waiting for retry with external URLs allowed")
-                }
-                1 -> {
-                    helper.assertTrue(Files.exists(packFileV1), "download should succeed once external URLs are allowed")
-                    helper.assertTrue(
-                        server.packRepository.selectedIds.contains(expectedPackIdV1),
-                        "Pack '$expectedPackIdV1' should be selected after install",
-                    )
-                    helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
-                    phase.set(2)
-                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
-                    helper.assertTrue(false, "waiting for same-version re-dispatch to settle")
-                }
-                2 -> {
-                    helper.assertTrue(
-                        requestCount.get() == 1,
-                        "same-version re-dispatch must not trigger a second download, got ${requestCount.get()} requests",
-                    )
-                    phase.set(3)
-                    // v1 is still selected here: this must download v2 to a new file rather than
-                    // overwrite v1's (locked-while-selected) file in place
-                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url, version = "2")), server)
-                    helper.assertTrue(false, "waiting for version bump to settle")
-                }
-                3 -> {
-                    helper.assertTrue(Files.exists(packFileV2), "v2 should be downloaded to its own file")
-                    helper.assertTrue(
-                        server.packRepository.selectedIds.contains(expectedPackIdV2) &&
-                            !server.packRepository.selectedIds.contains(expectedPackIdV1),
-                        "v2 should replace v1 in the selection",
-                    )
-                    helper.assertTrue(requestCount.get() == 2, "version bump should trigger exactly 1 more download, got ${requestCount.get()} total")
-                    helper.assertFalse(Files.exists(packFileV1), "old v1 file should be deleted after being retired")
-                    phase.set(4)
-                    // same version, only the URL changes: must still be detected as a change
-                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url2, version = "2")), server)
-                    helper.assertTrue(false, "waiting for URL-only change to settle")
-                }
-                4 -> {
-                    helper.assertTrue(Files.exists(packFileV2Url2), "URL-only change should be downloaded to its own file")
-                    helper.assertTrue(
-                        server.packRepository.selectedIds.contains(expectedPackIdV2Url2) &&
-                            !server.packRepository.selectedIds.contains(expectedPackIdV2),
-                        "new URL's pack should replace the old URL's pack in the selection",
-                    )
-                    helper.assertTrue(requestCount.get() == 3, "URL-only change should trigger exactly 1 more download, got ${requestCount.get()} total")
-                    helper.assertFalse(Files.exists(packFileV2), "old (same-version, old-URL) file should be deleted after being retired")
-                    phase.set(5)
-                    RemoteDatapackHandler.handleApiUpdate(server, emptyList())
-                    helper.assertTrue(false, "waiting for removal dispatch to settle")
-                }
-                else -> {
-                    helper.assertFalse(server.packRepository.selectedIds.contains(expectedPackIdV2Url2), "pack should be deselected after removal")
-                    helper.assertFalse(Files.exists(packFileV2Url2), "pack file should be deleted after removal")
-                    httpServer.stop(0)
-                    httpServer2.stop(0)
-                    ApiBalegoConfig.remoteDatapackSync = prevEnabled
-                    ApiBalegoConfig.remoteDatapackAllowExternalUrl = prevExternal
-                    ApiBalegoConfig.dataSyncUrl = prevSyncUrl
-                }
+        return sequence
+            .thenExecuteAfter(1) {
+                helper.assertFalse(Files.exists(disabledPackFile), "Disabled datapack sync must not install anything")
+                ApiBalegoConfig.remoteDatapackSync = true
+                dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
             }
-        }
+            .thenExecute {
+                helper.assertFalse(Files.exists(packFileV1), "download must be rejected while external URLs are disabled")
+                ApiBalegoConfig.remoteDatapackAllowExternalUrl = true
+                dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+            }
+            .thenWaitUntil {
+                helper.assertTrue(Files.exists(packFileV1), "download should succeed once external URLs are allowed")
+                helper.assertTrue(
+                    server.packRepository.selectedIds.contains(fileNameV1),
+                    "Pack '$fileNameV1' should be selected after install",
+                )
+                helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
+            }
+            .thenExecute {
+                // same-version re-dispatch must not trigger a second download
+                dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+            }
+            .thenWaitUntil {
+                helper.assertTrue(
+                    requestCount.get() == 1,
+                    "same-version re-dispatch must not trigger a second download, got ${requestCount.get()} requests",
+                )
+            }
+            .thenExecute {
+                // v1 is still selected here: this must download v2 to a new file rather than
+                // overwrite v1's (locked-while-selected) file in place
+                dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url, version = "2")), server)
+            }
+            .thenWaitUntil {
+                helper.assertTrue(Files.exists(packFileV2), "v2 should be downloaded to its own file")
+                helper.assertTrue(
+                    server.packRepository.selectedIds.contains(fileNameV2) &&
+                        !server.packRepository.selectedIds.contains(fileNameV1),
+                    "v2 should replace v1 in the selection",
+                )
+                helper.assertTrue(requestCount.get() == 2, "version bump should trigger exactly 1 more download, got ${requestCount.get()} total")
+                helper.assertFalse(Files.exists(packFileV1), "old v1 file should be deleted after being retired")
+            }
+            .thenExecute {
+                // same version, only the URL changes: must still be detected as a change
+                dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url2, version = "2")), server)
+            }
+            .thenWaitUntil {
+                helper.assertTrue(Files.exists(packFileV2Url2), "URL-only change should be downloaded to its own file")
+                helper.assertTrue(
+                    server.packRepository.selectedIds.contains(fileNameV2Url2) &&
+                        !server.packRepository.selectedIds.contains(fileNameV2),
+                    "new URL's pack should replace the old URL's pack in the selection",
+                )
+                helper.assertTrue(requestCount.get() == 3, "URL-only change should trigger exactly 1 more download, got ${requestCount.get()} total")
+                helper.assertFalse(Files.exists(packFileV2), "old (same-version, old-URL) file should be deleted after being retired")
+            }
+            .thenExecute {
+                RemoteDatapackHandler.handleApiUpdate(server, emptyList())
+            }
+            .thenWaitUntil {
+                helper.assertFalse(server.packRepository.selectedIds.contains(fileNameV2Url2), "pack should be deselected after removal")
+                helper.assertFalse(Files.exists(packFileV2Url2), "pack file should be deleted after removal")
+            }
+            .thenExecute {
+                httpServer.stop(0)
+                httpServer2.stop(0)
+                ApiBalegoConfig.remoteDatapackSync = prevEnabled
+                ApiBalegoConfig.remoteDatapackAllowExternalUrl = prevExternal
+                ApiBalegoConfig.dataSyncUrl = prevSyncUrl
+            }
+    }
+
+    /**
+     * Combined gametest for everything that needs a real running server: config bootstrap, join
+     * dispatch against a real player, and the datapack/structure handlers (real file/network/world
+     * I/O). Everything else lives in base/src/test as plain unit tests, which run sequentially and
+     * don't need a server at all - see ApibalegoDispatchTest.kt.
+     *
+     * Kept as one continuous sequence rather than several independent gametests: the shared handler
+     * singletons (structure/datapack) treat "not present in this dispatch's entries" as "no longer
+     * desired" and retire/delete accordingly, so concurrently-running gametests dispatching to the
+     * same handler would clobber each other's state. Running everything in one script means there's
+     * only ever one dispatch in flight at a time.
+     */
+    fun combinedHandlerLifecycleTest(helper: GameTestHelper) {
+        helper.assertTrue(ApiBalegoConfigHandler.config != null, "ApiBalegoConfig was not loaded")
+        helper.assertTrue(ApiBalegoConfig.dataSyncUrl.isNotBlank(), "dataSyncUrl default missing")
+
+        var sequence = helper.startSequence()
+        sequence = toastJoinStep(helper, sequence)
+        sequence = commandDispatchStep(helper, sequence)
+        sequence = structureHandlerStep(helper, sequence)
+        sequence = datapackHandlerStep(helper, sequence)
+        sequence.thenSucceed()
     }
 }
