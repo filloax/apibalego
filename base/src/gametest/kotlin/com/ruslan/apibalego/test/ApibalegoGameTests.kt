@@ -31,6 +31,7 @@ import net.minecraft.world.level.ChunkPos
 import net.minecraft.gametest.framework.GameTestHelper
 import net.minecraft.network.chat.Component
 import net.minecraft.resources.Identifier
+import net.minecraft.server.MinecraftServer
 import net.minecraft.world.level.gamerules.GameRules
 import java.io.ByteArrayOutputStream
 import java.net.InetSocketAddress
@@ -409,6 +410,13 @@ object ApibalegoGameTests {
     private fun datapackIdentity(version: String, downloadUrl: String) = "${version}_${downloadUrl.hashCode()}"
 
     /**
+     * Avoids calling all other types with empty list
+     */
+    private fun dispatchDatapackUpdate(entries: List<ApiEntryRaw>, server: MinecraftServer) {
+        ApiEntryRegistry.lookup<RemoteDatapackHandler.DatapackDetails>(ID_API_HANDLER_DATAPACK).dispatchUpdate(entries, server)
+    }
+
+    /**
      * End-to-end lifecycle for a single gamemaster-managed datapack: rejected while external URLs
      * are disabled and the origin differs -> installed and selected once allowed -> re-dispatching
      * the same version doesn't re-download -> version bump while selected downloads to a new file
@@ -456,7 +464,7 @@ object ApibalegoGameTests {
         val packFileV2Url2 = dpDir.resolve(fileNameV2Url2)
         val phase = AtomicInteger(0)
 
-        ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+        dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
 
         helper.succeedWhen {
             ApiBalegoConfig.remoteDatapackSync = true
@@ -465,7 +473,7 @@ object ApibalegoGameTests {
                     helper.assertFalse(Files.exists(packFileV1), "download must be rejected while external URLs are disabled")
                     phase.set(1)
                     ApiBalegoConfig.remoteDatapackAllowExternalUrl = true
-                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
                     helper.assertTrue(false, "waiting for retry with external URLs allowed")
                 }
                 1 -> {
@@ -476,7 +484,7 @@ object ApibalegoGameTests {
                     )
                     helper.assertTrue(requestCount.get() == 1, "expected exactly 1 download request so far, got ${requestCount.get()}")
                     phase.set(2)
-                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url)), server)
+                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url)), server)
                     helper.assertTrue(false, "waiting for same-version re-dispatch to settle")
                 }
                 2 -> {
@@ -487,7 +495,7 @@ object ApibalegoGameTests {
                     phase.set(3)
                     // v1 is still selected here: this must download v2 to a new file rather than
                     // overwrite v1's (locked-while-selected) file in place
-                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url, version = "2")), server)
+                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url, version = "2")), server)
                     helper.assertTrue(false, "waiting for version bump to settle")
                 }
                 3 -> {
@@ -501,7 +509,7 @@ object ApibalegoGameTests {
                     helper.assertFalse(Files.exists(packFileV1), "old v1 file should be deleted after being retired")
                     phase.set(4)
                     // same version, only the URL changes: must still be detected as a change
-                    ApiEntryRegistry.dispatchUpdate(listOf(makeDatapackEntry(entryId, url2, version = "2")), server)
+                    dispatchDatapackUpdate(listOf(makeDatapackEntry(entryId, url2, version = "2")), server)
                     helper.assertTrue(false, "waiting for URL-only change to settle")
                 }
                 4 -> {
