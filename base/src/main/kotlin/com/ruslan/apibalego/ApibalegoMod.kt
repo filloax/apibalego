@@ -7,7 +7,6 @@ import com.ruslan.apibalego.client.socket.BuiltinClientLiveUpdateEvents
 import com.ruslan.apibalego.client.socket.ClientLiveUpdatesConnection
 import com.ruslan.apibalego.config.ApiBalegoConfigHandler
 import com.ruslan.apibalego.http.BuiltinApiHandlers
-import com.ruslan.apibalego.http.DataRemoteSync
 import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.network.ApiBalegoPackets
 import com.ruslan.apibalego.socket.BuiltinLiveUpdateEvents
@@ -15,7 +14,7 @@ import com.ruslan.apibalego.utils.ApibalegoLogger
 import org.apache.logging.log4j.LogManager
 import java.nio.file.Path
 
-object Apibalego {
+object ApibalegoMod {
     const val MOD_ID = "apibalego"
     const val MOD_NAME = "Apibalego"
 

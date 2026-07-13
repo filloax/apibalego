@@ -5,8 +5,8 @@ import net.fabricmc.loader.api.FabricLoader
 
 object ApiBalegoFabric : ModInitializer {
     override fun onInitialize() {
-        Apibalego.init(FabricLoader.getInstance().gameDir)
+        ApibalegoMod.init(FabricLoader.getInstance().gameDir)
 
-        Apibalego.LOGGER.info("Initialized Fabric entry point")
+        ApibalegoMod.LOGGER.info("Initialized Fabric entry point")
     }
 }

@@ -1,7 +1,7 @@
 package com.ruslan.apibalego.http
 
 import com.google.gson.GsonBuilder
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.data.ApibalegoPersistentData
 import kotlinx.serialization.DeserializationStrategy
@@ -42,10 +42,10 @@ object DataRemoteSync {
     private val subscriptionParams = mutableMapOf<String, SubscriptionParams>()
     private val gson = GsonBuilder().create()
     private val json = Json { ignoreUnknownKeys = true } // Kotlinx's serialization acts better with kotlin non-nullables etc
-    private val httpFetcher = HttpFetcher("apibalego-requests", Apibalego.LOGGER)
+    private val httpFetcher = HttpFetcher("apibalego-requests", ApibalegoMod.LOGGER)
     private var didFirstLoad = mutableMapOf<String, Boolean>()
     private val doOnNextServerStart = LinkedBlockingQueue<(MinecraftServer) -> Unit>()
-    private val logger = Apibalego.LOGGER
+    private val logger = ApibalegoMod.LOGGER
 
     /**
      * Subscribe to a URL under the given (stable) name. Will send a GET request to that URL, and

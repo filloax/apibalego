@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.data
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 import net.minecraft.client.Minecraft
@@ -34,7 +34,7 @@ object ApibalegoClientData {
             try {
                 json.decodeFromString(Data.serializer(), file.readText())
             } catch (e: Exception) {
-                Apibalego.LOGGER.error("Failed to read client data file, resetting it", e)
+                ApibalegoMod.LOGGER.error("Failed to read client data file, resetting it", e)
                 Data()
             }
         } else Data()

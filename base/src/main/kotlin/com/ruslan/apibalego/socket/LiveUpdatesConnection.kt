@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.socket
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import io.socket.client.IO
 import io.socket.client.Socket
@@ -51,7 +51,7 @@ class LiveUpdatesConnection internal constructor(
                 activeConnection = conn
             }
             else if (!ApiBalegoConfig.liveUpdateService)
-                Apibalego.LOGGER.info("LiveUpdatesConnection was disabled from mod settings, will not start")
+                ApibalegoMod.LOGGER.info("LiveUpdatesConnection was disabled from mod settings, will not start")
         }
 
         fun serverStop(server: MinecraftServer) {
@@ -141,7 +141,7 @@ class LiveUpdatesConnection internal constructor(
             }
         }
         if (!running) {
-            Apibalego.LOGGER.info("Stopped LiveUpdatesConnection while connecting to remote")
+            ApibalegoMod.LOGGER.info("Stopped LiveUpdatesConnection while connecting to remote")
         }
     }
 
@@ -149,7 +149,7 @@ class LiveUpdatesConnection internal constructor(
         try {
             logInfo("Sending message on socket: $message")
             liveSocket?.send(message) ?: run {
-                Apibalego.LOGGER.error("Couldn't send message $message: socket null")
+                ApibalegoMod.LOGGER.error("Couldn't send message $message: socket null")
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -242,18 +242,18 @@ class LiveUpdatesConnection internal constructor(
         // Interrupt thread if sleeping
         running = false
         try {
-            thread?.interrupt() ?: Apibalego.LOGGER.error("Thread is null!")
+            thread?.interrupt() ?: ApibalegoMod.LOGGER.error("Thread is null!")
         } catch (e: Exception) {
-            Apibalego.LOGGER.error("Error in interrupting the LiveUpdatesConnection thread: ${e.stackTraceToString()}")
+            ApibalegoMod.LOGGER.error("Error in interrupting the LiveUpdatesConnection thread: ${e.stackTraceToString()}")
         }
     }
 
     private fun logInfo(message: String) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | $message")
+        ApibalegoMod.LOGGER.info("LiveUpdatesConnection | $message")
     }
 
     private fun logError(message: String) {
-        Apibalego.LOGGER.error("LiveUpdatesConnection | $message")
+        ApibalegoMod.LOGGER.error("LiveUpdatesConnection | $message")
     }
 }
 

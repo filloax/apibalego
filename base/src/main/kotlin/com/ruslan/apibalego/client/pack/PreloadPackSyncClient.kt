@@ -1,10 +1,9 @@
 package com.ruslan.apibalego.client.pack
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.client.handlers.ClientResourcePackHandler
 import com.ruslan.apibalego.client.http.ClientApiEntryRaw
 import com.ruslan.apibalego.client.http.ClientApiEntryRegistry
-import com.ruslan.apibalego.client.http.ClientApiEntryType
 import com.ruslan.apibalego.client.http.ClientGamemasterApi
 import com.ruslan.apibalego.client.http.ID_CLIENT_API_HANDLER_RESOURCEPACK
 import com.ruslan.apibalego.config.ApiBalegoConfig
@@ -22,9 +21,9 @@ import java.nio.file.Path
  */
 object PreloadPackSyncClient {
     private val json = Json { ignoreUnknownKeys = true }
-    private val httpFetcher = HttpFetcher("apibalego-preload-client", Apibalego.LOGGER)
+    private val httpFetcher = HttpFetcher("apibalego-preload-client", ApibalegoMod.LOGGER)
 
-    fun clientResourcePackDir(): Path = Apibalego.gameDir.resolve("apibalego/resourcepacks")
+    fun clientResourcePackDir(): Path = ApibalegoMod.gameDir.resolve("apibalego/resourcepacks")
 
     fun clientRepositorySource() = ApibalegoRepositorySource(clientResourcePackDir(), PackType.CLIENT_RESOURCES)
 
@@ -36,7 +35,7 @@ object PreloadPackSyncClient {
         val url = "${ClientGamemasterApi.syncUrl()}?type=${urlEncode(ID_CLIENT_API_HANDLER_RESOURCEPACK.toString())}"
         val rawEntries = fetchEntries(url, ApiBalegoConfig.clientDataSyncApiKey)
         if (rawEntries == null) {
-            Apibalego.LOGGER.warn("Preload resource pack sync: gamemaster unreachable, using whatever's already on disk")
+            ApibalegoMod.LOGGER.warn("Preload resource pack sync: gamemaster unreachable, using whatever's already on disk")
             return
         }
 
@@ -56,7 +55,7 @@ object PreloadPackSyncClient {
             val body = httpFetcher.sendRequestBlocking(request).let { HttpFetcher.getResponseContent(it) }
             json.decodeFromString(ListSerializer(ClientApiEntryRaw.serializer()), body)
         } catch (e: Exception) {
-            Apibalego.LOGGER.error("Preload resource pack sync: failed to fetch/parse gamemaster response: ${e.message}")
+            ApibalegoMod.LOGGER.error("Preload resource pack sync: failed to fetch/parse gamemaster response: ${e.message}")
             null
         }
     }

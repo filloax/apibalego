@@ -1,7 +1,7 @@
 package com.ruslan.apibalego.handlers
 
 import com.filloax.fxlib.api.ScheduledServerTask
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.http.ApiEntry
@@ -38,7 +38,7 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
     override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<DatapackDetails>>) {
         if (!ApiBalegoConfig.remoteDatapackSync) {
             if (entries.isNotEmpty())
-                Apibalego.LOGGER.warn("Received datapack entries but datapack sync disabled, ignoring!")
+                ApibalegoMod.LOGGER.warn("Received datapack entries but datapack sync disabled, ignoring!")
             return
         }
 
@@ -53,7 +53,7 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
             val repo = server.packRepository
             repo.reload()
             server.reloadResources(repo.selectedIds).thenRun {
-                Apibalego.LOGGER.info("Datapack sync: reloaded resources after gamemaster update")
+                ApibalegoMod.LOGGER.info("Datapack sync: reloaded resources after gamemaster update")
             }
         }
     }
@@ -73,7 +73,7 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
             val target = dir.resolve(name)
             if (!target.exists()) {
                 if (!RemoteDownloadUtils.isUrlAllowed(details.downloadUrl, ApiBalegoConfig.dataSyncUrl, ApiBalegoConfig.remoteDatapackAllowExternalUrl)) {
-                    Apibalego.LOGGER.error(
+                    ApibalegoMod.LOGGER.error(
                         "Datapack '$id' download URL '${details.downloadUrl}' not allowed " +
                             "(different origin than data sync URL, and external URLs disabled)"
                     )
@@ -83,7 +83,7 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
                     RemoteDownloadUtils.downloadToFile(target, details.downloadUrl, ApiBalegoConfig.dataSyncApiKey)
                     changed = true
                 } catch (e: Exception) {
-                    Apibalego.LOGGER.error("Failed to download datapack '$id' from ${details.downloadUrl}: ${e.message}")
+                    ApibalegoMod.LOGGER.error("Failed to download datapack '$id' from ${details.downloadUrl}: ${e.message}")
                 }
             }
         }

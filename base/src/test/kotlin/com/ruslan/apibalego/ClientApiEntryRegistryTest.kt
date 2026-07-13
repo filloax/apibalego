@@ -30,7 +30,7 @@ class ClientApiEntryRegistryTest {
             received = entries.firstOrNull()?.details
         }
 
-        val type = ClientApiEntryRegistry.lookup(key)
+        val type = ClientApiEntryRegistry.lookupRaw(key)
         val rawDetails = buildJsonObject {
             put("value", JsonPrimitive("hello"))
             put("count", JsonPrimitive(42))
@@ -54,7 +54,7 @@ class ClientApiEntryRegistryTest {
         ClientApiEntryRegistry.registerSimple(keyA) { _, _ -> }
         ClientApiEntryRegistry.registerSimple(keyB) { _, entries -> receivedB = entries.toList() }
 
-        val typeA = ClientApiEntryRegistry.lookup(keyA)
+        val typeA = ClientApiEntryRegistry.lookupRaw(keyA)
 
         ClientApiEntryRegistry.dispatchUpdate(
             listOf(ClientApiEntryRaw(type = typeA, id = "only-a", active = true)),

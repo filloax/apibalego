@@ -1,11 +1,10 @@
 package com.ruslan.apibalego.pack
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.handlers.RemoteDatapackHandler
 import com.ruslan.apibalego.http.ApiEntryRaw
 import com.ruslan.apibalego.http.ApiEntryRegistry
-import com.ruslan.apibalego.http.ApiEntryType
 import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.http.HttpFetcher
 import com.ruslan.apibalego.http.ID_API_HANDLER_DATAPACK
@@ -23,9 +22,9 @@ import java.nio.file.Path
  */
 object PreloadPackSync {
     private val json = Json { ignoreUnknownKeys = true }
-    private val httpFetcher = HttpFetcher("apibalego-preload", Apibalego.LOGGER)
+    private val httpFetcher = HttpFetcher("apibalego-preload", ApibalegoMod.LOGGER)
 
-    fun serverDatapackDir(): Path = Apibalego.gameDir.resolve("apibalego/datapacks")
+    fun serverDatapackDir(): Path = ApibalegoMod.gameDir.resolve("apibalego/datapacks")
 
     fun serverRepositorySource() = ApibalegoRepositorySource(serverDatapackDir(), PackType.SERVER_DATA)
 
@@ -36,7 +35,7 @@ object PreloadPackSync {
         val url = "${GamemasterApi.syncUrl()}?type=${urlEncode(ID_API_HANDLER_DATAPACK.toString())}"
         val rawEntries = fetchEntries(url, ApiBalegoConfig.dataSyncApiKey)
         if (rawEntries == null) {
-            Apibalego.LOGGER.warn("Preload datapack sync: gamemaster unreachable, using whatever's already on disk")
+            ApibalegoMod.LOGGER.warn("Preload datapack sync: gamemaster unreachable, using whatever's already on disk")
             return
         }
 
@@ -56,7 +55,7 @@ object PreloadPackSync {
             val body = httpFetcher.sendRequestBlocking(request).let { HttpFetcher.getResponseContent(it) }
             json.decodeFromString(ListSerializer(ApiEntryRaw.serializer()), body)
         } catch (e: Exception) {
-            Apibalego.LOGGER.error("Preload datapack sync: failed to fetch/parse gamemaster response: ${e.message}")
+            ApibalegoMod.LOGGER.error("Preload datapack sync: failed to fetch/parse gamemaster response: ${e.message}")
             null
         }
     }

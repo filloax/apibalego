@@ -10,11 +10,11 @@ import net.neoforged.neoforge.event.AddPackFindersEvent
 import thedarkcolour.kotlinforforge.neoforge.forge.MOD_BUS
 import thedarkcolour.kotlinforforge.neoforge.forge.runForDist
 
-@Mod(Apibalego.MOD_ID)
+@Mod(ApibalegoMod.MOD_ID)
 object ApiBalegoNeo {
     init {
-        Apibalego.isNeoforge = true
-        Apibalego.init(FMLPaths.GAMEDIR.get())
+        ApibalegoMod.isNeoforge = true
+        ApibalegoMod.init(FMLPaths.GAMEDIR.get())
 
         MOD_BUS.addListener<AddPackFindersEvent> { event ->
             if (event.packType == PackType.SERVER_DATA) {
@@ -26,14 +26,14 @@ object ApiBalegoNeo {
         runForDist(
             clientTarget = {
                 MOD_BUS.addListener<FMLClientSetupEvent> {
-                    Apibalego.initClient()
+                    ApibalegoMod.initClient()
                 }
                 MOD_BUS.addListener<AddPackFindersEvent> { event ->
                     if (event.packType == PackType.CLIENT_RESOURCES) {
                         // Fires before FMLClientSetupEvent (i.e. before Apibalego.initClient()),
                         // so the client handler-type registry isn't populated yet - force it here,
                         // same reasoning as Fabric's ClientPackRepositoryMixin.
-                        Apibalego.preInitClient(FMLPaths.GAMEDIR.get())
+                        ApibalegoMod.preInitClient(FMLPaths.GAMEDIR.get())
                         PreloadPackSyncClient.preloadClientResourcePacks()
                         event.addRepositorySource(PreloadPackSyncClient.clientRepositorySource())
                     }
@@ -42,6 +42,6 @@ object ApiBalegoNeo {
             serverTarget = {},
         )
 
-        Apibalego.LOGGER.info("Initialized NeoForge entry point")
+        ApibalegoMod.LOGGER.info("Initialized NeoForge entry point")
     }
 }

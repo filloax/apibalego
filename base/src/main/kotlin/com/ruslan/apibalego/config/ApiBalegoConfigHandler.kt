@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.config
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.teamresourceful.resourcefulconfig.api.loader.Configurator
 import com.teamresourceful.resourcefulconfig.api.types.ResourcefulConfig
 
@@ -9,7 +9,7 @@ import com.teamresourceful.resourcefulconfig.api.types.ResourcefulConfig
  * if the library changes initialization means between versions.
  */
 object ApiBalegoConfigHandler {
-    private val CONFIGURATOR = Configurator(Apibalego.MOD_ID)
+    private val CONFIGURATOR = Configurator(ApibalegoMod.MOD_ID)
     var config: ResourcefulConfig? = null
         private set
     private val loadCallbacks: MutableList<(ResourcefulConfig) -> Unit> = mutableListOf()

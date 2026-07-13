@@ -7,7 +7,7 @@ import com.filloax.fxlib.api.json.SimpleComponentSerializer
 import com.filloax.fxlib.api.nbt.putIfAbsent
 import com.filloax.fxlib.api.networking.sendPacket
 import com.ruslan.apibalego.ApiBalegoConstants
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.http.ApiEntry
 import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
@@ -15,9 +15,7 @@ import com.ruslan.apibalego.network.CustomToastPacket
 import kotlinx.serialization.Serializable
 import net.minecraft.nbt.CompoundTag
 import net.minecraft.nbt.IntTag
-import net.minecraft.network.PacketSendListener
 import net.minecraft.network.chat.Component
-import net.minecraft.network.protocol.Packet
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import net.minecraft.world.item.Item
@@ -51,7 +49,7 @@ object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
     private fun Item.safeDefaultInstance(): ItemStack? = try {
         defaultInstance
     } catch (e: Exception) {
-        Apibalego.LOGGER.error("Failed to build ItemStack for toast item '$this': ${e.message}")
+        ApibalegoMod.LOGGER.error("Failed to build ItemStack for toast item '$this': ${e.message}")
         null
     }
 
@@ -98,7 +96,7 @@ object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
     // live
 
     fun handleLiveUpdate(data: ToastData, server: MinecraftServer, sender: ResponseSender) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Received toast")
+        ApibalegoMod.LOGGER.info("LiveUpdatesConnection | Received toast")
         val packet = data.toPacket()
         server.playerList.players.forEach { player ->
             player.sendPacket(packet) { future ->

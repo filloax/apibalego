@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.socket
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.socket.LiveSocket
 import com.ruslan.apibalego.socket.ResponseSender
@@ -44,7 +44,7 @@ class ClientLiveUpdatesConnection internal constructor(
                 conn.start()
                 activeConnection = conn
             } else if (!enabled()) {
-                Apibalego.LOGGER.info("ClientLiveUpdatesConnection was disabled from mod settings, will not start")
+                ApibalegoMod.LOGGER.info("ClientLiveUpdatesConnection was disabled from mod settings, will not start")
             }
         }
 
@@ -132,7 +132,7 @@ class ClientLiveUpdatesConnection internal constructor(
             }
         }
         if (!running) {
-            Apibalego.LOGGER.info("Stopped ClientLiveUpdatesConnection while connecting to remote")
+            ApibalegoMod.LOGGER.info("Stopped ClientLiveUpdatesConnection while connecting to remote")
         }
     }
 
@@ -140,7 +140,7 @@ class ClientLiveUpdatesConnection internal constructor(
         try {
             logInfo("Sending message on socket: $message")
             liveSocket?.send(message) ?: run {
-                Apibalego.LOGGER.error("Couldn't send message $message: socket null")
+                ApibalegoMod.LOGGER.error("Couldn't send message $message: socket null")
             }
         } catch (e: Exception) {
             e.printStackTrace()
@@ -230,18 +230,18 @@ class ClientLiveUpdatesConnection internal constructor(
         socket?.emit("mod_disconnect")
         running = false
         try {
-            thread?.interrupt() ?: Apibalego.LOGGER.error("Thread is null!")
+            thread?.interrupt() ?: ApibalegoMod.LOGGER.error("Thread is null!")
         } catch (e: Exception) {
-            Apibalego.LOGGER.error("Error in interrupting the ClientLiveUpdatesConnection thread: ${e.stackTraceToString()}")
+            ApibalegoMod.LOGGER.error("Error in interrupting the ClientLiveUpdatesConnection thread: ${e.stackTraceToString()}")
         }
     }
 
     private fun logInfo(message: String) {
-        Apibalego.LOGGER.info("ClientLiveUpdatesConnection | $message")
+        ApibalegoMod.LOGGER.info("ClientLiveUpdatesConnection | $message")
     }
 
     private fun logError(message: String) {
-        Apibalego.LOGGER.error("ClientLiveUpdatesConnection | $message")
+        ApibalegoMod.LOGGER.error("ClientLiveUpdatesConnection | $message")
     }
 }
 

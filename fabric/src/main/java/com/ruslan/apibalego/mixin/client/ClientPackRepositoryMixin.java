@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.mixin.client;
 
-import com.ruslan.apibalego.Apibalego;
+import com.ruslan.apibalego.ApibalegoMod;
 import com.ruslan.apibalego.client.pack.PreloadPackSyncClient;
 import net.fabricmc.loader.api.FabricLoader;
 import net.minecraft.client.resources.ClientPackSource;
@@ -37,7 +37,7 @@ public abstract class ClientPackRepositoryMixin {
             return;
         }
 
-        Apibalego.preInitClient(FabricLoader.getInstance().getGameDir());
+        ApibalegoMod.preInitClient(FabricLoader.getInstance().getGameDir());
 
         PreloadPackSyncClient.INSTANCE.preloadClientResourcePacks();
         Set<RepositorySource> mutable = new LinkedHashSet<>(this.sources);
