@@ -15,7 +15,7 @@
     filloaxlib = "0.38.0-26.2"
     # optional: separate version for filloaxlib common, defaults to filloaxlib version if unset
     filloaxlibCommon = "0.38.0a-26.2"
-    modmenu = "20.0.0-beta.4"
+    modmenu = "20.0.1"
     rconfig = "5.0.0"
     rconfigMc = "26.2"
 
