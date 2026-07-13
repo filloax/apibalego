@@ -38,7 +38,7 @@ import java.util.zip.ZipOutputStream
  */
 object ApibalegoClientGameTests {
     private fun menuMessageEntry(id: String, messages: List<String>, active: Boolean = true) = ClientApiEntryRaw(
-        type = ClientApiEntryRegistry.lookup(ID_CLIENT_API_HANDLER_MENU_MESSAGE),
+        type = ClientApiEntryRegistry.lookupRaw(ID_CLIENT_API_HANDLER_MENU_MESSAGE),
         details = buildJsonObject {
             put("messages", buildJsonArray { messages.forEach { add(it) } })
         },
@@ -47,14 +47,14 @@ object ApibalegoClientGameTests {
     )
 
     private fun toastEntry(id: String, title: String) = ClientApiEntryRaw(
-        type = ClientApiEntryRegistry.lookup(ID_CLIENT_API_HANDLER_TOAST),
+        type = ClientApiEntryRegistry.lookupRaw(ID_CLIENT_API_HANDLER_TOAST),
         details = buildJsonObject { put("title", JsonPrimitive(title)) },
         id = id,
         active = true,
     )
 
     private fun packEntry(id: String, downloadUrl: String, version: String = "1") = ClientApiEntryRaw(
-        type = ClientApiEntryRegistry.lookup(ID_CLIENT_API_HANDLER_RESOURCEPACK),
+        type = ClientApiEntryRegistry.lookupRaw(ID_CLIENT_API_HANDLER_RESOURCEPACK),
         details = buildJsonObject {
             put("downloadUrl", JsonPrimitive(downloadUrl))
             put("version", JsonPrimitive(version))
