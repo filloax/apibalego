@@ -13,65 +13,88 @@ import com.ruslan.apibalego.network.ApiBalegoPackets
 import com.ruslan.apibalego.socket.BuiltinLiveUpdateEvents
 import com.ruslan.apibalego.utils.ApibalegoLogger
 import org.apache.logging.log4j.LogManager
+import java.nio.file.Path
 
-/**
- * Provides the generic HTTP polling ([DataRemoteSync]), websocket live updates
- * ([com.ruslan.apibalego.socket.LiveUpdatesConnection]), config and commands, plus
- * registries that let consumer mods plug in their own event handlers.
- */
-abstract class Apibalego {
-    companion object {
-        const val MOD_ID = "apibalego"
-        const val MOD_NAME = "Apibalego"
+object Apibalego {
+    const val MOD_ID = "apibalego"
+    const val MOD_NAME = "Apibalego"
 
-        @JvmField
-        val LOGGER = ApibalegoLogger(LogManager.getLogger(MOD_NAME))
+    @JvmField
+    val LOGGER = ApibalegoLogger(LogManager.getLogger(MOD_NAME))
 
-        var isNeoforge = false      // set to true in ApiBalegoNeo for custom logic
+    var isNeoforge = false      // set to true in ApiBalegoNeo for custom logic
 
-        private var initialized = false
-        private var clientInitialized = false
+    // Used for datapacks/resourcepacks
+    lateinit var gameDir: Path
+        private set
 
-        /**
-         * Initialize the mod.
-         * Calling init() more than once (e.g. several consumer mods) is harmless.
-         */
-        fun init() {
-            if (initialized) return
-            initialized = true
+    private var preInitialized = false
+    private var initialized = false
+    private var clientPreInitialized = false
+    private var clientInitialized = false
 
-            LOGGER.info("Initializing")
+    /**
+     * Things preload stuff needs loaded
+     */
+    @JvmStatic
+    fun preInit(gameDir: Path) {
+        if (preInitialized) return
+        preInitialized = true
+        this.gameDir = gameDir
 
-            ApiBalegoConfigHandler.initConfig()
+        ApiBalegoConfigHandler.initConfig()
+        BuiltinApiHandlers.registerAll()
+    }
 
-            BuiltinApiHandlers.registerAll()
-            BuiltinLiveUpdateEvents.registerAll()
+    @JvmStatic
+    fun init(gameDir: Path) {
+        if (initialized) return
+        initialized = true
+        preInit(gameDir)
 
-            GamemasterApi.init()
+        LOGGER.info("Initializing")
 
-            ApiBalegoPackets.registerPacketsS2C()
-            ApiBalegoPackets.registerPacketsC2S()
+        BuiltinLiveUpdateEvents.registerAll()
 
-            ApiBalegoModEvents.get().initCallbacks()
+        GamemasterApi.init()
 
-            LOGGER.info("Initialized!")
-        }
+        ApiBalegoPackets.registerPacketsS2C()
+        ApiBalegoPackets.registerPacketsC2S()
 
-        /**
-         * Initialize the client-only parts of the mod. Call from each loader's client entrypoint,
-         * after [init]. Calling more than once is harmless.
-         */
-        fun initClient() {
-            if (clientInitialized) return
-            clientInitialized = true
+        ApiBalegoModEvents.get().initCallbacks()
 
-            BuiltinClientApiHandlers.registerAll()
-            BuiltinClientLiveUpdateEvents.registerAll()
-            ClientGamemasterApi.init()
-            ClientDataSync.start()
-            ClientLiveUpdatesConnection.clientStart()
+        LOGGER.info("Initialized!")
+    }
 
-            LOGGER.info("Initialized client!")
-        }
+    /**
+     * The subset of [initClient] that client-side pack preload (see [PreloadPackSyncClient]) needs
+     * before a Minecraft instance exists: [preInit] plus the client handler-type registry
+     * ([com.ruslan.apibalego.client.http.ClientApiEntryRegistry]). Callable from Java since Fabric's
+     * client mixin forces this early - see ClientPackRepositoryMixin.
+     */
+    @JvmStatic
+    fun preInitClient(gameDir: Path) {
+        preInit(gameDir)
+        if (clientPreInitialized) return
+        clientPreInitialized = true
+
+        BuiltinClientApiHandlers.registerAll()
+    }
+
+    /**
+     * Initialize the client-only parts of the mod. Call from each loader's client entrypoint,
+     * after [init]. Calling more than once is harmless.
+     */
+    fun initClient() {
+        if (clientInitialized) return
+        clientInitialized = true
+        preInitClient(gameDir)
+
+        BuiltinClientLiveUpdateEvents.registerAll()
+        ClientGamemasterApi.init()
+        ClientDataSync.start()
+        ClientLiveUpdatesConnection.clientStart()
+
+        LOGGER.info("Initialized client!")
     }
 }

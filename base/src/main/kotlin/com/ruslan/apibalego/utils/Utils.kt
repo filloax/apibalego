@@ -2,7 +2,7 @@ package com.ruslan.apibalego.utils
 
 import com.filloax.fxlib.api.FxLibServices
 import com.ruslan.apibalego.Apibalego
-import com.ruslan.apibalego.Apibalego.Companion.MOD_NAME
+import com.ruslan.apibalego.Apibalego.MOD_NAME
 import net.minecraft.resources.Identifier
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.Logger

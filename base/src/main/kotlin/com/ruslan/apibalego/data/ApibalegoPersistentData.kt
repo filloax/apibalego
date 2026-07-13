@@ -15,18 +15,14 @@ import net.minecraft.server.MinecraftServer
 class ApibalegoPersistentData private constructor(
     alreadyRanCommands: Set<String> = setOf(),
     lastEndpointOutputs: Map<String, String> = mapOf(),
-    installedDatapacks: Map<String, String> = mapOf(),
 ) : FxSavedData<ApibalegoPersistentData>(CODEC) {
     val alreadyRanCommands: MutableSet<String> = alreadyRanCommands.toMutableSet()
     val lastEndpointOutputs: MutableMap<String, String> = lastEndpointOutputs.toMutableMap()
-    /** Entry id -> installed version, for the remote datapack sync handler. */
-    val installedDatapacks: MutableMap<String, String> = installedDatapacks.toMutableMap()
 
     companion object {
         val CODEC: Codec<ApibalegoPersistentData> = RecordCodecBuilder.create { builder -> builder.group(
             Codec.STRING.mutableSetOf().fieldOf("alreadyRan").forGetter(ApibalegoPersistentData::alreadyRanCommands),
             Codec.unboundedMap(Codec.STRING, Codec.STRING).fieldOf("lastEndpointOutputs").forGetter(ApibalegoPersistentData::lastEndpointOutputs),
-            Codec.unboundedMap(Codec.STRING, Codec.STRING).optionalFieldOf("installedDatapacks", mapOf()).forGetter(ApibalegoPersistentData::installedDatapacks),
         ).apply(builder, ::ApibalegoPersistentData) }
 
         private val DEF = define(id(APIBALEGO_PERSISTENT_DATA), ::ApibalegoPersistentData, CODEC)

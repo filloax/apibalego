@@ -1,23 +1,29 @@
 package com.ruslan.apibalego.handlers
 
-import com.filloax.fxlib.api.EventUtil
 import com.filloax.fxlib.api.ScheduledServerTask
 import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
 import com.ruslan.apibalego.config.ApiBalegoConfig
-import com.ruslan.apibalego.data.ApibalegoPersistentData
 import com.ruslan.apibalego.http.ApiEntry
 import com.ruslan.apibalego.http.ApiEntryHandler
+import com.ruslan.apibalego.pack.PreloadPackSync
 import com.ruslan.apibalego.utils.RemoteDownloadUtils
 import kotlinx.serialization.Serializable
 import net.minecraft.server.MinecraftServer
-import net.minecraft.world.level.storage.LevelResource
+import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
 import kotlin.io.path.deleteIfExists
+import kotlin.io.path.exists
+import kotlin.streams.asSequence
 
 /**
- * Downloads and enables/disables datapacks pushed by the gamemaster, using the same
- * folder-scan + reload mechanism vanilla's /reload and /datapack commands use.
+ * Downloads/removes datapacks pushed by the gamemaster into the apibalego
+ * datapack folder (see [PreloadPackSync]).
+ * <br>
+ * Needed as some features require a world reload when added after server start.
+ * <br>
+ * Note that packs from [PreloadPackSyncClient] are "required", meaning they are always on if the file is present.
  */
 object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDetails> {
     @Serializable
@@ -26,10 +32,9 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
         val version: String = "",
     )
 
-    /**
-     * Checks if files are needed to download/remove from existing set,
-     * then does download, applies changes, and removes old files
-     */
+    data class PackCheckResult(val changed: Boolean, val retiredFileNames: List<String>)
+
+    // Applies only after preload, during normal api sync (preload runs earlier)
     override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<DatapackDetails>>) {
         if (!ApiBalegoConfig.remoteDatapackSync) {
             if (entries.isNotEmpty())
@@ -37,26 +42,36 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
             return
         }
 
-        EventUtil.runWhenServerStarted(server) { srv ->
-            val savedData = ApibalegoPersistentData.get(srv)
-            val installed = savedData.installedDatapacks
+        val dir = PreloadPackSync.serverDatapackDir()
+        val desired = entries.filter { it.active }.associate { it.id to it.details!! }
+        val result = checkAndDownloadDataPacks(dir, desired)
+        if (!result.changed) return
 
-            val desired = entries.filter { it.active }.associate { it.id to it.details!! }
-            val toRemove = installed.keys - desired.keys
-            val toDownload = desired.filter { (id, details) -> installed[id] != identity(details) }
+        ScheduledServerTask.schedule(server, 0) {
+            result.retiredFileNames.forEach { fileName -> dir.resolve(fileName).deleteIfExists() }
 
-            if (toDownload.isEmpty() && toRemove.isEmpty()) return@runWhenServerStarted
+            val repo = server.packRepository
+            repo.reload()
+            server.reloadResources(repo.selectedIds).thenRun {
+                Apibalego.LOGGER.info("Datapack sync: reloaded resources after gamemaster update")
+            }
+        }
+    }
 
-            val dir = srv.getWorldPath(LevelResource.DATAPACK_DIR)
-            dir.createDirectories()
+    /**
+     * Downloads missing packs and reports which files on disk are no longer desired
+     */
+    fun checkAndDownloadDataPacks(dir: Path, desired: Map<String, DatapackDetails>): PackCheckResult {
+        dir.createDirectories()
 
-            // old files to deselect+delete: fully removed ids, and ids being updated to a new identity
-            val retiredFileNames = mutableListOf<String>()
-            toRemove.forEach { id -> retiredFileNames.add(fileName(id, installed.getValue(id))) }
-            toDownload.forEach { (id, _) -> installed[id]?.let { oldIdentity -> retiredFileNames.add(fileName(id, oldIdentity)) } }
+        var changed = false
+        val expectedFileNames = mutableSetOf<String>()
 
-            val downloadedIds = mutableSetOf<String>()
-            toDownload.forEach { (id, details) ->
+        desired.forEach { (id, details) ->
+            val name = fileName(id, identity(details))
+            expectedFileNames.add(name)
+            val target = dir.resolve(name)
+            if (!target.exists()) {
                 if (!RemoteDownloadUtils.isUrlAllowed(details.downloadUrl, ApiBalegoConfig.dataSyncUrl, ApiBalegoConfig.remoteDatapackAllowExternalUrl)) {
                     Apibalego.LOGGER.error(
                         "Datapack '$id' download URL '${details.downloadUrl}' not allowed " +
@@ -65,50 +80,26 @@ object RemoteDatapackHandler : ApiEntryHandler<RemoteDatapackHandler.DatapackDet
                     return@forEach
                 }
                 try {
-                    downloadPack(dir, id, identity(details), details.downloadUrl)
-                    downloadedIds.add(id)
+                    RemoteDownloadUtils.downloadToFile(target, details.downloadUrl, ApiBalegoConfig.dataSyncApiKey)
+                    changed = true
                 } catch (e: Exception) {
                     Apibalego.LOGGER.error("Failed to download datapack '$id' from ${details.downloadUrl}: ${e.message}")
                 }
             }
-
-            ScheduledServerTask.schedule(srv, 0) {
-                val repo = srv.packRepository
-                repo.reload()
-                val selected = repo.selectedIds.toMutableSet()
-
-                retiredFileNames.forEach { fileName -> selected.remove("file/$fileName") }
-
-                val availableAfterReload = downloadedIds.filter { id ->
-                    val ok = repo.isAvailable(packId(id, identity(desired.getValue(id))))
-                    if (!ok) Apibalego.LOGGER.error("Downloaded datapack '$id' not recognized as a pack after reload (bad zip?)")
-                    ok
-                }
-                availableAfterReload.forEach { id -> selected.add(packId(id, identity(desired.getValue(id)))) }
-
-                srv.reloadResources(selected).thenRun {
-                    // Only safe to delete now: while a pack is selected, its zip is held open
-                    // (locked on Windows), so deleting it before deselect+reload fails.
-                    retiredFileNames.forEach { fileName -> deletePackFile(dir, fileName) }
-                    toRemove.forEach { id -> installed.remove(id) }
-                    availableAfterReload.forEach { id -> installed[id] = identity(desired.getValue(id)) }
-                    savedData.setDirty()
-                    Apibalego.LOGGER.info("Datapack sync: reloaded resources, selected packs now: $selected")
-                }
-            }
         }
+
+        val retiredFileNames = Files.list(dir).use { stream ->
+            stream.asSequence()
+                .map { it.fileName.toString() }
+                .filter { it !in expectedFileNames }
+                .toList()
+        }
+        if (retiredFileNames.isNotEmpty()) changed = true
+
+        return PackCheckResult(changed, retiredFileNames)
     }
 
     private fun identity(details: DatapackDetails) = RemoteDownloadUtils.installIdentity(details.version, details.downloadUrl)
     private fun fileName(id: String, identity: String) =
         "apibalego_dp_${RemoteDownloadUtils.sanitizeForFileName(id)}_${RemoteDownloadUtils.sanitizeForFileName(identity)}.zip"
-    private fun packId(id: String, identity: String) = "file/${fileName(id, identity)}"
-
-    private fun deletePackFile(dir: Path, fileName: String) {
-        dir.resolve(fileName).deleteIfExists()
-    }
-
-    private fun downloadPack(dir: Path, id: String, identity: String, url: String) {
-        RemoteDownloadUtils.downloadToFile(dir.resolve(fileName(id, identity)), url, ApiBalegoConfig.dataSyncApiKey)
-    }
 }

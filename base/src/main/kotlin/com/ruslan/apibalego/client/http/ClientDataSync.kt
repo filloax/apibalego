@@ -78,21 +78,23 @@ object ClientDataSync {
     fun sync() {
         subscriptions.forEach { (name, subscription) ->
             if (subscription.url.isBlank()) return@forEach
-            val conn = httpFetcher.makeConnection(subscription.url, subscriptionHeaders[name] ?: emptyMap())
-            httpFetcher.sendRequest(conn).whenComplete { conn2, exception ->
+            val request = HttpFetcher.makeRequest(subscription.url, subscriptionHeaders[name] ?: emptyMap())
+            httpFetcher.sendRequest(request).whenComplete { response, exception ->
                 try {
                     if (exception != null) {
                         logger.error("[client:$name] ERROR: ${exception.message}")
                         return@whenComplete
                     }
-                    val status = conn2.responseCode
-                    if (status < 300) {
-                        val content = httpFetcher.getResponseContent(conn2)
-                        saveToCache(name, content)
-                        logger.info("[client:$name] SUCCESS, STATUS: $status")
-                        subscription.callbacks.forEach { it(content) }
-                    } else {
-                        logger.error("[client:$name] ERROR, STATUS $status")
+                    response.use {
+                        val status = response.code
+                        if (status < 300) {
+                            val content = response.body?.string() ?: ""
+                            saveToCache(name, content)
+                            logger.info("[client:$name] SUCCESS, STATUS: $status")
+                            subscription.callbacks.forEach { it(content) }
+                        } else {
+                            logger.error("[client:$name] ERROR, STATUS $status")
+                        }
                     }
                 } catch (e: Exception) {
                     logger.error("[client:$name] OTHER FAILURE", e)

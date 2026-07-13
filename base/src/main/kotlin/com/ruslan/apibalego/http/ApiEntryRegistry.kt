@@ -10,6 +10,7 @@ import kotlinx.serialization.json.JsonNull
 import net.minecraft.resources.Identifier
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
+import kotlin.reflect.KClass
 
 private val json = Json {
 //        ignoreUnknownKeys = true
@@ -19,8 +20,11 @@ private val json = Json {
 abstract class AbstractApiEntryType<T : Any> (
     val key: Identifier,
     val detailsDeserializer: KSerializer<T>?,
+    val detailsType: KClass<T>,
 ) {
-    protected fun parseDetails(raw: IApiEntryRaw) = detailsDeserializer?.let { deserializer ->
+    // Some features like preload for packs cannot go through usual dispatch,
+    // allow em to resolve anyways
+    fun parseDetails(raw: IApiEntryRaw) = detailsDeserializer?.let { deserializer ->
         raw.details?.takeIf { it != JsonNull }
             ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
     }
@@ -33,7 +37,8 @@ class ApiEntryType<T : Any> internal constructor(
     // if null, type has no extra info
     detailsDeserializer: KSerializer<T>?,
     val handler: ApiEntryHandler<T>,
-) : AbstractApiEntryType<T>(key, detailsDeserializer) {
+    detailsType: KClass<T>,
+) : AbstractApiEntryType<T>(key, detailsDeserializer, detailsType) {
     fun dispatchUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
         handler.handleApiUpdate(server, entries.map { it.resolve(this, parseDetails(it)) })
     }
@@ -41,6 +46,13 @@ class ApiEntryType<T : Any> internal constructor(
     fun dispatchJoin(entries: Collection<ApiEntryRaw>, player: ServerPlayer) {
         handler.handleApiJoin(player, entries.map { it.resolve(this, parseDetails(it)) })
     }
+}
+
+inline fun <reified T: Any> ApiEntryType<*>.asType(): ApiEntryType<T> {
+    if (detailsType != T::class)
+        throw IllegalArgumentException("Type mismatch: $key is not ${T::class.java.simpleName}")
+    @Suppress("UNCHECKED_CAST")
+    return this as ApiEntryType<T>
 }
 
 interface ApiEntryHandler<T : Any> {
@@ -61,8 +73,18 @@ object ApiEntryRegistry {
         // if null, type has no extra info
         detailsDeserializer: KSerializer<T>?,
         handler: ApiEntryHandler<T>,
+        detailsClass: KClass<T>,
     ) {
-        registry[key] = ApiEntryType(key, detailsDeserializer, handler)
+        registry[key] = ApiEntryType(key, detailsDeserializer, handler, detailsClass)
+    }
+
+    inline fun <reified T : Any>register(
+        key: Identifier,
+        // if null, type has no extra info
+        detailsDeserializer: KSerializer<T>?,
+        handler: ApiEntryHandler<T>,
+    ) {
+        register(key, detailsDeserializer, handler, T::class)
     }
 
     fun registerSimple(
@@ -82,10 +104,12 @@ object ApiEntryRegistry {
                 joinHandler?.invoke(player, entries)
             }
         }
-        registry[key] = ApiEntryType(key, null, handler)
+        registry[key] = ApiEntryType(key, null, handler, Nothing::class)
     }
 
-    fun lookup(key: Identifier) = registry[key] ?: throw UnknownApiEntryTypeException(key)
+    fun lookupRaw(key: Identifier) = registry[key] ?: throw UnknownApiEntryTypeException(key)
+
+    inline fun <reified T : Any>lookup(key: Identifier) = lookupRaw(key).asType<T>()
 
     fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
         val byType = all.groupBy { it.type }
@@ -126,7 +150,7 @@ abstract class AbstractApiEntryTypeSerializer<T : AbstractApiEntryType<*>>(
 
 class ApiEntryTypeSerializer : AbstractApiEntryTypeSerializer<ApiEntryType<*>>(
     "ApiEntryType",
-    ApiEntryRegistry::lookup,
+    ApiEntryRegistry::lookupRaw,
 )
 
 //#endregion

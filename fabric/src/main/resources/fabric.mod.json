@@ -16,7 +16,8 @@
   "icon": "assets/apibalego/icon.png",
   "environment": "*",
   "mixins": [
-    "apibalego.mixins.json"
+    "apibalego.mixins.json",
+    "apibalego-fabric.mixins.json"
   ],
   "entrypoints": {
     "main": [

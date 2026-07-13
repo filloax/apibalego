@@ -1,86 +1,93 @@
 package com.ruslan.apibalego.http
 
 import com.ruslan.apibalego.utils.ApibalegoLogger
-import java.io.BufferedReader
-import java.io.InputStreamReader
-import java.net.HttpURLConnection
-import java.net.URI
+import okhttp3.Call
+import okhttp3.Callback
+import okhttp3.OkHttpClient
+import okhttp3.Request
+import okhttp3.Response
+import java.io.IOException
+import java.time.Duration
 import java.util.concurrent.CompletableFuture
-import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
-import java.util.concurrent.ThreadFactory
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * connection/request setup, shared between the server-side ([DataRemoteSync])
- * and client-side sync classes
+ * shared connection/request setup
  */
 class HttpFetcher(
     private val threadNamePrefix: String,
     private val logger: ApibalegoLogger,
 ) {
-    private var executorService: ExecutorService? = null
+    private var client: OkHttpClient? = null
 
-    fun makeConnection(url: String, headers: Map<String, String> = emptyMap()): HttpURLConnection {
-        val conn = URI(url).toURL().openConnection() as HttpURLConnection
-        conn.requestMethod = "GET"
-        conn.setRequestProperty("Content-Type", "application/json")
-        conn.setRequestProperty("Accept-Charset", "UTF-8")
-        conn.connectTimeout = 5000
-        conn.readTimeout = 5000
-        headers.forEach { conn.setRequestProperty(it.key, it.value) }
+    companion object {
+        private val TIMEOUT: Duration = Duration.ofSeconds(5)
 
-        return conn
+        // Shared client for one-off blocking calls (preload), before polling executor is setup
+        private val BLOCKING_CLIENT = OkHttpClient.Builder()
+            .connectTimeout(TIMEOUT)
+            .readTimeout(TIMEOUT)
+            .build()
+
+        fun makeRequest(url: String, headers: Map<String, String> = emptyMap()): Request {
+            val builder = Request.Builder()
+                .url(url)
+                .header("Content-Type", "application/json")
+                .header("Accept-Charset", "UTF-8")
+            headers.forEach { (key, value) -> builder.header(key, value) }
+            return builder.build()
+        }
+
+        fun getResponseContent(response: Response): String = response.use { it.body?.string() ?: "" }
     }
 
-    fun sendRequest(conn: HttpURLConnection): CompletableFuture<HttpURLConnection> {
-        val completableFuture = CompletableFuture<HttpURLConnection>()
-        executorService?.submit {
-            logger.info("$threadNamePrefix: CONNECTING VIA ${conn.url}")
-            try {
-                conn.connect()
-                completableFuture.complete(conn)
-                conn.disconnect()
-                logger.info("$threadNamePrefix: DISCONNECTED FROM ${conn.url}")
-            } catch (e: Exception) {
-                logger.error("$threadNamePrefix: FAILURE WITH ${conn.url}", e.message)
-                completableFuture.completeExceptionally(e)
+    fun sendRequest(request: Request): CompletableFuture<Response> {
+        val future = CompletableFuture<Response>()
+        val c = client
+        if (c == null) {
+            future.completeExceptionally(IllegalStateException("HTTP client not setup!"))
+            return future
+        }
+        logger.info("$threadNamePrefix: CONNECTING VIA ${request.url}")
+        c.newCall(request).enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                logger.error("$threadNamePrefix: FAILURE WITH ${request.url}", e.message)
+                future.completeExceptionally(e)
             }
-        } ?: run {
-            completableFuture.completeExceptionally(IllegalStateException("Executor service not setup!"))
-        }
-        return completableFuture
+
+            override fun onResponse(call: Call, response: Response) {
+                logger.info("$threadNamePrefix: DISCONNECTED FROM ${request.url}")
+                future.complete(response)
+            }
+        })
+        return future
     }
 
-    fun getResponseContent(conn: HttpURLConnection): String {
-        val respReader = BufferedReader(InputStreamReader(conn.inputStream, "UTF-8"))
-        var inputLine: String?
-        val contentBuffer = StringBuffer()
-        while (respReader.readLine().also { inputLine = it } != null) {
-            contentBuffer.append(inputLine)
-        }
-        respReader.close()
-        return contentBuffer.toString()
+    // use when async executors are not setup yet (preload, mostly)
+    fun sendRequestBlocking(request: Request): Response {
+        logger.info("$threadNamePrefix: CONNECTING VIA ${request.url} (blocking)")
+        return BLOCKING_CLIENT.newCall(request).execute()
     }
 
     fun start() {
         stop()
         val poolNum = AtomicInteger(1)
-        executorService = Executors.newFixedThreadPool(
+        val executor = Executors.newFixedThreadPool(
             1,
-            object : ThreadFactory {
-                private val threadNum = AtomicInteger(1)
-                private val namePrefix = "$threadNamePrefix-" + poolNum.getAndIncrement() + "-thread"
-                override fun newThread(r: Runnable): Thread {
-                    // Daemon so a missed stop() (e.g. client process exit) can't hang the JVM
-                    return Thread(null, r, namePrefix + threadNum.getAndIncrement()).also { it.isDaemon = true }
-                }
-            }
-        )
+        ) { r ->
+            // Daemon so a missed stop() (e.g. client process exit) can't hang the JVM
+            Thread(null, r, "$threadNamePrefix-${poolNum.getAndIncrement()}-thread").also { it.isDaemon = true }
+        }
+        client = OkHttpClient.Builder()
+            .connectTimeout(TIMEOUT)
+            .readTimeout(TIMEOUT)
+            .dispatcher(okhttp3.Dispatcher(executor))
+            .build()
     }
 
     fun stop() {
-        executorService?.shutdown()
-        executorService = null
+        client?.dispatcher?.executorService?.shutdown()
+        client = null
     }
 }
