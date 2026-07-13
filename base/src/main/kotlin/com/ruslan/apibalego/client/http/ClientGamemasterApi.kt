@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.http
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import kotlinx.serialization.builtins.ListSerializer
 import net.minecraft.client.Minecraft
@@ -27,7 +27,7 @@ object ClientGamemasterApi {
     private fun handleUpdate(entries: List<ClientApiEntryRaw>) {
         val hash = Objects.hash(entries)
         if (hash == lastHash) {
-            Apibalego.LOGGER.info("Client gamemaster data unchanged, not re-dispatching")
+            ApibalegoMod.LOGGER.info("Client gamemaster data unchanged, not re-dispatching")
             return
         }
 

@@ -5,7 +5,7 @@ import com.filloax.fxlib.api.FxLibServices
 import com.filloax.fxlib.api.json.BlockPosSerializer
 import com.filloax.fxlib.api.json.IdentifierSerializer
 import com.filloax.fxlib.api.structure.FixedStructureGeneration
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.http.ApiEntry
 import com.ruslan.apibalego.http.ApiEntryHandler
 import kotlinx.serialization.Serializable
@@ -54,7 +54,7 @@ object RemoteStructuresHandler : ApiEntryHandler<RemoteStructuresHandler.RemoteS
                 val id = spawnData.structureId
                 val structureRef = server.registryAccess().lookup(Registries.STRUCTURE).getOrNull()?.getValue(id)
                 if (structureRef == null) {
-                    Apibalego.LOGGER.error("Cannot queue non-existent structure $id")
+                    ApibalegoMod.LOGGER.error("Cannot queue non-existent structure $id")
                 } else {
                     fixedStructureGeneration.register(server.overworld(), it.getSpawnId(), spawnData.startPos, id, spawnData.rotation ?: Rotation.NONE)
                     structsToSpawnById[it.getSpawnId()] = spawnData

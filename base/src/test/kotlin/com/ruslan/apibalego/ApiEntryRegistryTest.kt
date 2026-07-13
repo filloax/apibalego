@@ -35,7 +35,7 @@ class ApiEntryRegistryTest {
             },
         )
 
-        val type = ApiEntryRegistry.lookup(key)
+        val type = ApiEntryRegistry.lookupRaw(key)
         val rawDetails = buildJsonObject {
             put("value", JsonPrimitive("hello"))
             put("count", JsonPrimitive(42))

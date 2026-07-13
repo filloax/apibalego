@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.handlers
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.client.data.ApibalegoClientData
 import com.ruslan.apibalego.client.gui.components.addCustomToast
 import com.ruslan.apibalego.client.http.ClientApiEntry
@@ -35,7 +35,7 @@ object ClientToastHandler : ClientApiEntryHandler<ToastHandler.ToastData> {
     // live
 
     fun handleLiveUpdate(data: ToastHandler.ToastData, client: Minecraft, sender: ResponseSender) {
-        Apibalego.LOGGER.info("ClientLiveUpdatesConnection | Received toast")
+        ApibalegoMod.LOGGER.info("ClientLiveUpdatesConnection | Received toast")
         client.execute {
             client.gui.toastManager().addCustomToast(data.title, data.message, data.item?.safeDefaultInstance())
         }
@@ -50,7 +50,7 @@ object ClientToastHandler : ClientApiEntryHandler<ToastHandler.ToastData> {
     private fun Item.safeDefaultInstance(): ItemStack? = try {
         defaultInstance
     } catch (e: Exception) {
-        Apibalego.LOGGER.error("Failed to build ItemStack for toast item '$this': ${e.message}")
+        ApibalegoMod.LOGGER.error("Failed to build ItemStack for toast item '$this': ${e.message}")
         null
     }
 }

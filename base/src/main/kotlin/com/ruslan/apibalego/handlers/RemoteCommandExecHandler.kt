@@ -1,13 +1,12 @@
 package com.ruslan.apibalego.handlers
 
 import com.filloax.fxlib.api.EventUtil
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.data.ApibalegoPersistentData
 import com.ruslan.apibalego.http.ApiEntry
 import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.socket.ResponseSender
-import com.ruslan.apibalego.utils.id
 import kotlinx.serialization.Serializable
 import net.minecraft.server.MinecraftServer
 import net.minecraft.world.phys.Vec3
@@ -27,14 +26,14 @@ object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.Comma
     override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<CommandDetails>>) {
         if (!ApiBalegoConfig.remoteCommandExecution) {
             if (entries.isNotEmpty())
-                Apibalego.LOGGER.warn("Received command entries but remote execution disabled, ignoring!")
+                ApibalegoMod.LOGGER.warn("Received command entries but remote execution disabled, ignoring!")
             return
         }
 
         EventUtil.runWhenServerStarted(server, true) { srv ->
             entries.forEach fe@{ entry ->
                 val details = entry.details ?: run {
-                    Apibalego.LOGGER.error("Command entry '${entry.id}' is missing command details")
+                    ApibalegoMod.LOGGER.error("Command entry '${entry.id}' is missing command details")
                     return@fe
                 }
                 val cmd = details.command.trim()
@@ -46,24 +45,24 @@ object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.Comma
                 savedData.alreadyRanCommands.add(id)
                 savedData.setDirty()
 
-                Apibalego.LOGGER.info("Executing remote command $cmd")
+                ApibalegoMod.LOGGER.info("Executing remote command $cmd")
                 performCommand(cmd, server, details.pos())
-                Apibalego.LOGGER.info("Executed remote command $cmd")
+                ApibalegoMod.LOGGER.info("Executed remote command $cmd")
             }
         }
     }
 
     fun handleCommandMessage(dto: LiveCommandDto, server: MinecraftServer, responseSender: ResponseSender) {
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Received command message ${dto.command}")
+        ApibalegoMod.LOGGER.info("LiveUpdatesConnection | Received command message ${dto.command}")
 
         if (!ApiBalegoConfig.remoteCommandExecution) {
-            Apibalego.LOGGER.warn("Received command message but remote execution disabled, ignoring! ${dto.command}")
+            ApibalegoMod.LOGGER.warn("Received command message but remote execution disabled, ignoring! ${dto.command}")
             responseSender.sendFailure("config_disabled")
             return
         }
 
         val success = performCommand(dto.command, server)
-        Apibalego.LOGGER.info("LiveUpdatesConnection | Executed command, success: $success")
+        ApibalegoMod.LOGGER.info("LiveUpdatesConnection | Executed command, success: $success")
         if (success) responseSender.sendSuccess() else responseSender.sendFailure("command_exception")
     }
 
@@ -76,7 +75,7 @@ object RemoteCommandExecHandler : ApiEntryHandler<RemoteCommandExecHandler.Comma
             true
         } catch (e: Throwable) {
             e.printStackTrace()
-            Apibalego.LOGGER.error("Failed remote command $command: ${e.message}")
+            ApibalegoMod.LOGGER.error("Failed remote command $command: ${e.message}")
             false
         }
     }

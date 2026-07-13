@@ -1,21 +1,21 @@
 package com.ruslan.apibalego.utils
 
 import com.filloax.fxlib.api.FxLibServices
-import com.ruslan.apibalego.Apibalego
-import com.ruslan.apibalego.Apibalego.MOD_NAME
+import com.ruslan.apibalego.ApibalegoMod
+import com.ruslan.apibalego.ApibalegoMod.MOD_NAME
 import net.minecraft.resources.Identifier
 import org.apache.logging.log4j.Level
 import org.apache.logging.log4j.Logger
 
 fun id(str: String): Identifier {
-    return Identifier.fromNamespaceAndPath(Apibalego.MOD_ID, str)
+    return Identifier.fromNamespaceAndPath(ApibalegoMod.MOD_ID, str)
 }
 
 class ApibalegoLogger(private val logger: Logger) {
     private val prefix by lazy {
         // The prefix is already present on Neoforge and Fabric's dev env.
         // runCatching guards against NPE when no platform launcher is available (unit tests).
-        if (Apibalego.isNeoforge || runCatching { FxLibServices.platform.isDevEnvironment() }.getOrDefault(false)) ""
+        if (ApibalegoMod.isNeoforge || runCatching { FxLibServices.platform.isDevEnvironment() }.getOrDefault(false)) ""
         else "[$MOD_NAME] "
     }
     fun log(level: Level, msg: String, vararg params: Any?) = logger.log(level, "$prefix$msg", *params)

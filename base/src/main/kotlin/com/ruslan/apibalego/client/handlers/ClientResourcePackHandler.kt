@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.handlers
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.client.http.ClientApiEntry
 import com.ruslan.apibalego.client.http.ClientApiEntryHandler
 import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
@@ -38,7 +38,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
     override fun handleApiUpdate(client: Minecraft, entries: Collection<ClientApiEntry<PackDetails>>) {
         if (!ApiBalegoConfig.clientResourcePackSync) {
             if (entries.isNotEmpty())
-                Apibalego.LOGGER.warn("Received resource pack entries but client resource pack sync disabled, ignoring!")
+                ApibalegoMod.LOGGER.warn("Received resource pack entries but client resource pack sync disabled, ignoring!")
             return
         }
 
@@ -55,7 +55,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
             repo.reload()
             // saves the current (required-pack-inclusive) selection to options, and reloads resources if it changed
             client.options.updateResourcePacks(repo)
-            Apibalego.LOGGER.info("Resource pack sync: reloaded resources after gamemaster update")
+            ApibalegoMod.LOGGER.info("Resource pack sync: reloaded resources after gamemaster update")
         }
     }
 
@@ -76,7 +76,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
                 if (!RemoteDownloadUtils.isUrlAllowed(
                         details.downloadUrl, ApiBalegoConfig.clientDataSyncUrl, ApiBalegoConfig.clientResourcePackAllowExternalUrl
                 )) {
-                    Apibalego.LOGGER.error(
+                    ApibalegoMod.LOGGER.error(
                         "Resource pack '$id' download URL '${details.downloadUrl}' not allowed " +
                             "(different origin than client data sync URL, and external URLs disabled)"
                     )
@@ -86,7 +86,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
                     RemoteDownloadUtils.downloadToFile(target, details.downloadUrl, ApiBalegoConfig.clientDataSyncApiKey)
                     changed = true
                 } catch (e: Exception) {
-                    Apibalego.LOGGER.error("Failed to download resource pack '$id' from ${details.downloadUrl}: ${e.message}")
+                    ApibalegoMod.LOGGER.error("Failed to download resource pack '$id' from ${details.downloadUrl}: ${e.message}")
                 }
             }
         }

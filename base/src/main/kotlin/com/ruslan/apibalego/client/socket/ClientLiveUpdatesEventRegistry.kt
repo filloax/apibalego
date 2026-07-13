@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.socket
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.socket.ResponseSender
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
@@ -43,7 +43,7 @@ object ClientLiveUpdatesEventRegistry {
     ): ClientLiveUpdatesEvent<T> {
         val event = ClientLiveUpdatesEvent(eventName, deserializer, { msg -> json.decodeFromString(deserializer, msg) }, handler)
         if (events.put(eventName, event) != null) {
-            Apibalego.LOGGER.warn("Overwrote client live update handler for event '$eventName'")
+            ApibalegoMod.LOGGER.warn("Overwrote client live update handler for event '$eventName'")
         }
         return event
     }
@@ -56,7 +56,7 @@ object ClientLiveUpdatesEventRegistry {
         val wrapped = ClientLiveUpdatesEventHandler<Unit> { _, client, sender -> handler(client, sender) }
         val event = ClientLiveUpdatesEvent(eventName, null, { _ -> Unit }, wrapped)
         if (events.put(eventName, event) != null) {
-            Apibalego.LOGGER.warn("Overwrote client live update handler for event '$eventName'")
+            ApibalegoMod.LOGGER.warn("Overwrote client live update handler for event '$eventName'")
         }
         return event
     }

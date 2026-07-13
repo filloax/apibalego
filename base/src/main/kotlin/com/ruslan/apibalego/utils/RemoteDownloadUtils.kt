@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.utils
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.http.HttpFetcher
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -51,7 +51,7 @@ object RemoteDownloadUtils {
         .build()
 
     fun downloadToFile(target: Path, url: String, apiKey: String) {
-        Apibalego.LOGGER.info("Downloading ${target.fileName} from $url...")
+        ApibalegoMod.LOGGER.info("Downloading ${target.fileName} from $url...")
         val tmp = target.resolveSibling("${target.fileName}.tmp")
         val headers = if (apiKey.isNotBlank()) mapOf("apiKey" to apiKey) else emptyMap()
         val request: Request = HttpFetcher.makeRequest(url, headers)
@@ -64,7 +64,7 @@ object RemoteDownloadUtils {
                     Files.copy(input, tmp, StandardCopyOption.REPLACE_EXISTING)
                 }
                 Files.move(tmp, target, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
-                Apibalego.LOGGER.info("Downloaded ${target.fileName} ($bytesCopied bytes)")
+                ApibalegoMod.LOGGER.info("Downloaded ${target.fileName} ($bytesCopied bytes)")
             } finally {
                 tmp.deleteIfExists()
             }

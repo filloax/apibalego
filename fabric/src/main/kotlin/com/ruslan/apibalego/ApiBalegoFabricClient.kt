@@ -4,8 +4,8 @@ import net.fabricmc.api.ClientModInitializer
 
 object ApiBalegoFabricClient : ClientModInitializer {
     override fun onInitializeClient() {
-        Apibalego.initClient()
+        ApibalegoMod.initClient()
 
-        Apibalego.LOGGER.info("Initialized Fabric client entry point")
+        ApibalegoMod.LOGGER.info("Initialized Fabric client entry point")
     }
 }

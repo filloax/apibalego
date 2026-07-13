@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.client.http
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.http.HttpFetcher
 import kotlinx.serialization.DeserializationStrategy
@@ -19,7 +19,7 @@ import java.util.concurrent.TimeUnit
  * resource packs, etc.
  */
 object ClientDataSync {
-    private val logger = Apibalego.LOGGER
+    private val logger = ApibalegoMod.LOGGER
     private val httpFetcher = HttpFetcher("apibalego-client-requests", logger)
     private val json = Json { ignoreUnknownKeys = true }
     private val subscriptions = mutableMapOf<String, Subscription>()

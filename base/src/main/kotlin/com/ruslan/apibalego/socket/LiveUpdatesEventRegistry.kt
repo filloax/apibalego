@@ -1,6 +1,6 @@
 package com.ruslan.apibalego.socket
 
-import com.ruslan.apibalego.Apibalego
+import com.ruslan.apibalego.ApibalegoMod
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
@@ -46,7 +46,7 @@ object LiveUpdatesEventRegistry {
     ): LiveUpdatesEvent<T> {
         val event = LiveUpdatesEvent(eventName, deserializer, { msg -> json.decodeFromString(deserializer, msg) }, handler)
         if (events.put(eventName, event) != null) {
-            Apibalego.LOGGER.warn("Overwrote live update handler for event '$eventName'")
+            ApibalegoMod.LOGGER.warn("Overwrote live update handler for event '$eventName'")
         }
         return event
     }
@@ -59,7 +59,7 @@ object LiveUpdatesEventRegistry {
         val wrapped = LiveUpdatesEventHandler<Unit> { _, server, sender -> handler(server, sender) }
         val event = LiveUpdatesEvent(eventName, null, { _ -> Unit }, wrapped)
         if (events.put(eventName, event) != null) {
-            Apibalego.LOGGER.warn("Overwrote live update handler for event '$eventName'")
+            ApibalegoMod.LOGGER.warn("Overwrote live update handler for event '$eventName'")
         }
         return event
     }
