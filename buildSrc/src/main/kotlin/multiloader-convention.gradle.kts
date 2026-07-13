@@ -73,7 +73,12 @@ repositories {
         setUrl("https://thedarkcolour.github.io/KotlinForForge/")
     }
 
-    maven("https://maven.terraformersmc.com/releases")
+    maven {
+        url = uri("https://maven.terraformersmc.com/releases/")
+        content {
+            includeGroup("com.terraformersmc")
+        }
+    }
 
     exclusiveContent {
         forRepository { maven("https://jitpack.io") }
