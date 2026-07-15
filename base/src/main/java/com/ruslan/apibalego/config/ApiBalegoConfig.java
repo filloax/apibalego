@@ -71,4 +71,8 @@ public final class ApiBalegoConfig {
     @ConfigEntry(id = "clientResourcePackAllowExternalUrl", translation = T_PREF + "clientResourcePackAllowExternalUrl.name")
     @Comment(value = "If disabled, resource pack download URLs must be on the same origin as the client data sync URL. Enable to allow downloading from any URL.", translation = T_PREF + "clientResourcePackAllowExternalUrl.comment")
     public static boolean clientResourcePackAllowExternalUrl = false;
+
+    @ConfigEntry(id = "generateApiDocs", translation = T_PREF + "generateApiDocs.name")
+    @Comment(value = "On server start, dump the currently registered server/client API entries and live sync events to markdown files in the 'apibalego-docs' folder, for reference when writing a gamemaster integration.", translation = T_PREF + "generateApiDocs.comment")
+    public static boolean generateApiDocs = false;
 }

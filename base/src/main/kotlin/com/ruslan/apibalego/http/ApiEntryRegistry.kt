@@ -111,6 +111,8 @@ object ApiEntryRegistry {
 
     inline fun <reified T : Any>lookup(key: Identifier) = lookupRaw(key).asType<T>()
 
+    fun all(): Map<Identifier, ApiEntryType<*>> = registry
+
     fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
         val byType = all.groupBy { it.type }
         registry.values.forEach { type ->
