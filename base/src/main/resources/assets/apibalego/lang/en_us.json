@@ -30,6 +30,8 @@
     "apibalego.config.web.clientResourcePackSync.comment": "Allow the gamemaster to download and enable/disable resource packs on the client.",
     "apibalego.config.web.clientResourcePackAllowExternalUrl.name": "Allow external resource pack URLs",
     "apibalego.config.web.clientResourcePackAllowExternalUrl.comment": "If disabled, resource pack download URLs must be on the same origin as the client data sync URL. Enable to allow downloading from any URL.",
+    "apibalego.config.web.generateApiDocs.name": "Generate API docs",
+    "apibalego.config.web.generateApiDocs.comment": "On server start, dump the currently registered server/client API entries and live sync events to markdown files in the 'apibalego-docs' folder, for reference when writing a gamemaster integration.",
 
     "apibalego.commands.gmaster.help": "Allows to configure the server to connect to a gamemaster console and enable §5gamemaster mode§r.\n§eMake sure to only connect to trusted sources, as they will be able to remotely run commands and more!§r",
     "apibalego.commands.gmaster.status_off": "Gamemaster mode is currently disabled.",

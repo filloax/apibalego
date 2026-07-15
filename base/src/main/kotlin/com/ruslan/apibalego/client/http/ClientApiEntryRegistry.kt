@@ -72,6 +72,8 @@ object ClientApiEntryRegistry {
 
     inline fun <reified T : Any>lookup(key: Identifier) = lookupRaw(key).asType<T>()
 
+    fun all(): Map<Identifier, ClientApiEntryType<*>> = registry
+
     fun dispatchUpdate(all: Collection<ClientApiEntryRaw>, client: Minecraft) {
         val byType = all.groupBy { it.type }
         registry.values.forEach { type ->
