@@ -1,6 +1,7 @@
 package com.ruslan.apibalego.docs
 
 import com.ruslan.apibalego.client.http.ClientApiEntryRegistry
+import com.ruslan.apibalego.http.ApiDetailsParser
 import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import kotlinx.serialization.KSerializer
@@ -30,7 +31,7 @@ object ApiDocGenerator {
         append(HEADER_NOTE)
         ApiEntryRegistry.all().entries.sortedBy { it.key.toString() }.forEach { (key, type) ->
             append("## `$key`\n\n")
-            appendPayload(this, type.detailsDeserializer, type.detailsType.simpleName)
+            appendPayload(this, type.detailsParser, type.detailsType.simpleName)
         }
     }
 
@@ -39,7 +40,7 @@ object ApiDocGenerator {
         append(HEADER_NOTE)
         ClientApiEntryRegistry.all().entries.sortedBy { it.key.toString() }.forEach { (key, type) ->
             append("## `$key`\n\n")
-            appendPayload(this, type.detailsDeserializer, type.detailsType.simpleName)
+            appendPayload(this, type.detailsParser, type.detailsType.simpleName)
         }
     }
 
@@ -48,11 +49,29 @@ object ApiDocGenerator {
         append(HEADER_NOTE)
         LiveUpdatesEventRegistry.all().entries.sortedBy { it.key }.forEach { (eventName, event) ->
             append("## `$eventName`\n\n")
-            appendPayload(this, event.deserializer, event.deserializer?.descriptor?.serialName)
+            val deserializer = event.deserializer
+            when {
+                deserializer != null -> appendSerializerPayload(this, deserializer, deserializer.descriptor.serialName)
+                event.payloadType != null -> appendOpaquePayload(this, event.payloadType?.simpleName)
+                else -> append("No payload.\n\n")
+            }
         }
     }
 
-    private fun appendPayload(sb: StringBuilder, deserializer: KSerializer<*>?, typeName: String?) {
+    private fun appendPayload(sb: StringBuilder, parser: ApiDetailsParser<*>?, typeName: String?) {
+        when (parser) {
+            null -> sb.append("No payload.\n\n")
+            is ApiDetailsParser.Kotlinx -> appendSerializerPayload(sb, parser.serializer, typeName)
+            else -> appendOpaquePayload(sb, typeName)
+        }
+    }
+
+    // codec/class/raw json types have no runtime field listing, only the name is known
+    private fun appendOpaquePayload(sb: StringBuilder, typeName: String?) {
+        sb.append("Payload: `$typeName` (structure not introspectable, defined by the owning mod)\n\n")
+    }
+
+    private fun appendSerializerPayload(sb: StringBuilder, deserializer: KSerializer<*>?, typeName: String?) {
         if (deserializer == null) {
             sb.append("No payload.\n\n")
             return
