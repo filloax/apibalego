@@ -2,25 +2,20 @@ package com.ruslan.apibalego.client.http
 
 import com.ruslan.apibalego.http.AbstractApiEntryType
 import com.ruslan.apibalego.http.AbstractApiEntryTypeSerializer
+import com.ruslan.apibalego.http.ApiDetailsParser
 import com.ruslan.apibalego.http.asType
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.json.Json
 import net.minecraft.client.Minecraft
 import net.minecraft.resources.Identifier
 import kotlin.reflect.KClass
 
-private val json = Json {
-//        ignoreUnknownKeys = true
-//        isLenient = true
-}
-
 class ClientApiEntryType<T : Any> internal constructor(
     key: Identifier,
     // if null, type has no extra info
-    detailsDeserializer: KSerializer<T>?,
+    detailsParser: ApiDetailsParser<T>?,
     val handler: ClientApiEntryHandler<T>,
     detailsClass: KClass<T>,
-) : AbstractApiEntryType<T>(key, detailsDeserializer, detailsClass) {
+) : AbstractApiEntryType<T>(key, detailsParser, detailsClass) {
     fun dispatchUpdate(entries: List<ClientApiEntryRaw>, client: Minecraft) {
         handler.handleApiUpdate(client, entries.map { it.resolve(this, parseDetails(it)) })
     }
@@ -49,7 +44,21 @@ object ClientApiEntryRegistry {
         handler: ClientApiEntryHandler<T>,
         detailsClass: KClass<T>,
     ) {
-        registry[key] = ClientApiEntryType(key, detailsDeserializer, handler, detailsClass)
+        registerWithParser(key, detailsDeserializer?.let { ApiDetailsParser.Kotlinx(it) }, handler, detailsClass)
+    }
+
+    /**
+     * Lower level [register], for details in formats other than kotlinx serialization:
+     * Minecraft Codecs, gson-parsed classes, raw json (see [ApiDetailsParser]).
+     */
+    fun <T : Any>registerWithParser(
+        key: Identifier,
+        // if null, type has no extra info
+        detailsParser: ApiDetailsParser<T>?,
+        handler: ClientApiEntryHandler<T>,
+        detailsClass: KClass<T>,
+    ) {
+        registry[key] = ClientApiEntryType(key, detailsParser, handler, detailsClass)
     }
 
     inline fun <reified T : Any>register(

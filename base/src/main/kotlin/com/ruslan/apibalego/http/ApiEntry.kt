@@ -19,7 +19,7 @@ data class ApiEntryRaw(
     val active: Boolean = true,
 ) : IApiEntryRaw {
     fun <T: Any> resolve(parsedType: ApiEntryType<T>, parsedDetails: T?): ApiEntry<T> {
-        if ((parsedType.detailsDeserializer == null) != (parsedDetails == null)) {
+        if ((parsedType.detailsParser == null) != (parsedDetails == null)) {
             throw IllegalArgumentException("Type mismatch: ${parsedType.key} must have details, but details are ${parsedDetails != null}")
         }
 

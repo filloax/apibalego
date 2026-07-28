@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.0
+
+- Add Java-facing APIs to avoid Kotlin serialization
+
 ## 0.2.1
 
 - Simple API docs autogeneration from registered entries

@@ -5,28 +5,25 @@ import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import net.minecraft.resources.Identifier
 import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerPlayer
 import kotlin.reflect.KClass
 
-private val json = Json {
-//        ignoreUnknownKeys = true
-//        isLenient = true
-}
-
 abstract class AbstractApiEntryType<T : Any> (
     val key: Identifier,
-    val detailsDeserializer: KSerializer<T>?,
+    val detailsParser: ApiDetailsParser<T>?,
     val detailsType: KClass<T>,
 ) {
+    /** Set only for types registered with a kotlinx serializer, see [detailsParser]. */
+    val detailsDeserializer: KSerializer<T>?
+        get() = (detailsParser as? ApiDetailsParser.Kotlinx)?.serializer
+
     // Some features like preload for packs cannot go through usual dispatch,
     // allow em to resolve anyways
-    fun parseDetails(raw: IApiEntryRaw) = detailsDeserializer?.let { deserializer ->
-        raw.details?.takeIf { it != JsonNull }
-            ?.let { d -> json.decodeFromJsonElement(deserializer, d) }
+    fun parseDetails(raw: IApiEntryRaw) = detailsParser?.let { parser ->
+        raw.details?.takeIf { it != JsonNull }?.let(parser::parse)
     }
 
     override fun toString() = key.toString()
@@ -35,10 +32,10 @@ abstract class AbstractApiEntryType<T : Any> (
 class ApiEntryType<T : Any> internal constructor(
     key: Identifier,
     // if null, type has no extra info
-    detailsDeserializer: KSerializer<T>?,
+    detailsParser: ApiDetailsParser<T>?,
     val handler: ApiEntryHandler<T>,
     detailsType: KClass<T>,
-) : AbstractApiEntryType<T>(key, detailsDeserializer, detailsType) {
+) : AbstractApiEntryType<T>(key, detailsParser, detailsType) {
     fun dispatchUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
         handler.handleApiUpdate(server, entries.map { it.resolve(this, parseDetails(it)) })
     }
@@ -75,7 +72,21 @@ object ApiEntryRegistry {
         handler: ApiEntryHandler<T>,
         detailsClass: KClass<T>,
     ) {
-        registry[key] = ApiEntryType(key, detailsDeserializer, handler, detailsClass)
+        registerWithParser(key, detailsDeserializer?.let { ApiDetailsParser.Kotlinx(it) }, handler, detailsClass)
+    }
+
+    /**
+     * Lower level [register], for details in formats other than kotlinx serialization:
+     * Minecraft Codecs, gson-parsed classes, raw json (see [ApiDetailsParser]).
+     */
+    fun <T : Any>registerWithParser(
+        key: Identifier,
+        // if null, type has no extra info
+        detailsParser: ApiDetailsParser<T>?,
+        handler: ApiEntryHandler<T>,
+        detailsClass: KClass<T>,
+    ) {
+        registry[key] = ApiEntryType(key, detailsParser, handler, detailsClass)
     }
 
     inline fun <reified T : Any>register(

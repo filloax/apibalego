@@ -1,9 +1,13 @@
 package com.ruslan.apibalego.socket
 
 import com.ruslan.apibalego.ApibalegoMod
+import com.ruslan.apibalego.http.ApiDetailsParser
+import com.google.gson.JsonParser
+import com.mojang.serialization.Codec
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.json.Json
 import net.minecraft.server.MinecraftServer
+import kotlin.reflect.KClass
 
 private val json = Json {
     ignoreUnknownKeys = true
@@ -21,6 +25,7 @@ fun interface LiveUpdatesEventHandler<T : Any> {
 class LiveUpdatesEvent<T : Any> internal constructor(
     val eventName: String,
     val deserializer: KSerializer<T>?,
+    val payloadType: KClass<T>?,
     private val parse: (String) -> T,
     private val handler: LiveUpdatesEventHandler<T>,
 ) {
@@ -43,13 +48,9 @@ object LiveUpdatesEventRegistry {
         eventName: String,
         deserializer: KSerializer<T>,
         handler: LiveUpdatesEventHandler<T>,
-    ): LiveUpdatesEvent<T> {
-        val event = LiveUpdatesEvent(eventName, deserializer, { msg -> json.decodeFromString(deserializer, msg) }, handler)
-        if (events.put(eventName, event) != null) {
-            ApibalegoMod.LOGGER.warn("Overwrote live update handler for event '$eventName'")
-        }
-        return event
-    }
+    ): LiveUpdatesEvent<T> = put(
+        LiveUpdatesEvent(eventName, deserializer, null, { msg -> json.decodeFromString(deserializer, msg) }, handler)
+    )
 
     /** Register a handler for an event with no meaningful payload (e.g. reload triggers). */
     fun register(
@@ -57,9 +58,49 @@ object LiveUpdatesEventRegistry {
         handler: (server: MinecraftServer, sender: ResponseSender) -> Unit,
     ): LiveUpdatesEvent<Unit> {
         val wrapped = LiveUpdatesEventHandler<Unit> { _, server, sender -> handler(server, sender) }
-        val event = LiveUpdatesEvent(eventName, null, { _ -> Unit }, wrapped)
-        if (events.put(eventName, event) != null) {
-            ApibalegoMod.LOGGER.warn("Overwrote live update handler for event '$eventName'")
+        return put(LiveUpdatesEvent(eventName, null, null, { _ -> Unit }, wrapped))
+    }
+
+    /** [register] with the payload parsed by a Minecraft [Codec] instead of a serializer. */
+    fun <T : Any> registerWithCodec(
+        eventName: String,
+        codec: Codec<T>,
+        payloadClass: KClass<T>,
+        handler: LiveUpdatesEventHandler<T>,
+    ): LiveUpdatesEvent<T> = put(
+        LiveUpdatesEvent(eventName, null, payloadClass, { msg ->
+            ApiDetailsParser.decodeWithCodec(codec, JsonParser.parseString(msg))
+        }, handler)
+    )
+
+    /** [register] with the payload parsed by gson as [payloadClass]. */
+    fun <T : Any> registerWithClass(
+        eventName: String,
+        payloadClass: KClass<T>,
+        handler: LiveUpdatesEventHandler<T>,
+    ): LiveUpdatesEvent<T> = put(
+        LiveUpdatesEvent(eventName, null, payloadClass, { msg ->
+            ApiDetailsParser.decodeWithGson(payloadClass.java, msg)
+        }, handler)
+    )
+
+    /** [register] with the payload handed over as raw json, parsing is up to the mod. */
+    fun registerJson(
+        eventName: String,
+        handler: LiveUpdatesEventHandler<com.google.gson.JsonElement>,
+    ): LiveUpdatesEvent<com.google.gson.JsonElement> = put(
+        LiveUpdatesEvent(
+            eventName,
+            null,
+            com.google.gson.JsonElement::class,
+            { msg -> JsonParser.parseString(msg) },
+            handler,
+        )
+    )
+
+    private fun <T : Any> put(event: LiveUpdatesEvent<T>): LiveUpdatesEvent<T> {
+        if (events.put(event.eventName, event) != null) {
+            ApibalegoMod.LOGGER.warn("Overwrote live update handler for event '${event.eventName}'")
         }
         return event
     }
