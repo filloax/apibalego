@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.0
+
+- Update to 26.3
+
 ## 0.3.0
 
 - Add Java-facing APIs to avoid Kotlin serialization
