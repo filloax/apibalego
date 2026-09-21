@@ -2,22 +2,22 @@
     java = "25"
 
 # General dependencies
-    minecraft-range = "26.2"
-    minecraft-range-fabric = ">=26.2"
-    minecraft = "26.2"
+    minecraft-range = "26.3"
+    minecraft-range-fabric = ">=26.3"
+    minecraft = "26.3"
     # Get versions from https://parchmentmc.org/docs/getting-started
     #parchment-minecraft = "26.2-snapshot-1"
     #parchment = "2025.12.20"
     # Get versions from https://projects.neoforged.net/neoforged/neoform
-    neoform = "26.2-1" # vanilla neoforge configuration
+    neoform = "26.3-1" # vanilla neoforge configuration
 
 # Mod dependencies
-    filloaxlib = "0.38.0-26.2"
+    filloaxlib = "0.42.0-26.3"
     # optional: separate version for filloaxlib common, defaults to filloaxlib version if unset
-    filloaxlibCommon = "0.38.0a-26.2"
-    modmenu = "20.0.1"
-    rconfig = "5.0.0"
-    rconfigMc = "26.2"
+#    filloaxlibCommon = "0.42.0-26.3"
+    modmenu = "21.0.0-beta.1"
+    rconfig = "6.0.1"
+    rconfigMc = "26.3"
 
 # Mod compatibility dependencies (todo: re-enabled if needed after 26.2 transition)
     lithostitched-neoforge = "1.7.9-neoforge-26.1"
@@ -40,15 +40,15 @@
 
 # Fabric Settings
     # Get versions from https://github.com/FabricMC/fabric-loader/releases
-    fabric = "0.18.6"
+    fabric = "0.19.5"
     # Get versions from https://modrinth.com/mod/fabric-api/versions
-    fabric-api = "0.153.0+26.2"
-    fabric-language-kotlin = "1.13.12+kotlin.2.4.0"
+    fabric-api = "0.160.7+26.3"
+    fabric-language-kotlin = "1.14.1+kotlin.2.4.20"
 
 # Neoforge Settings
     # Get versions from https://projects.neoforged.net/neoforged/neoforge
-    neoforge = "26.2.0.7-beta"
-    neoforge-range = "[26.2.0.7-beta,26.3)"
+    neoforge = "26.3.0.3-beta"
+    neoforge-range = "[26.3.0.3-beta,26.4)"
     kotlinforge = "6.3.0"
     kotlinforge-range = "[6.2.0,)"
 
@@ -66,9 +66,9 @@
 # Plugins
     plugin-dokka = "2.0.0"
     plugin-mixin = "0.7.38"
-    plugin-loom = "1.17-SNAPSHOT"
+    plugin-loom = "1.18.2"
     # Get versions from https://projects.neoforged.net/neoforged/moddevgradle
-    plugin-moddev = "2.0.141"
+    plugin-moddev = "2.0.147"
     plugin-idea-ext = "1.4.1"
 
 [libraries]
