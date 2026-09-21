@@ -217,10 +217,10 @@ object ApibalegoGameTests {
                 )
             }
             // Verify placement via vanilla StructureManager routed through FxLib's mixin.
-            // startsForStructure(ChunkPos, Predicate) checks at chunk granularity so the igloo
-            // doesn't need to overlap spawnPos exactly (igloo doesn't implement FixablePosition).
+            // startsForStructure(sectionX, sectionZ, Predicate) checks at chunk granularity so the
+            // igloo doesn't need to overlap spawnPos exactly (igloo doesn't implement FixablePosition).
             .thenWaitUntil {
-                val starts = helper.level.structureManager().startsForStructure(spawnChunk) { it == structure }
+                val starts = helper.level.structureManager().startsForStructure(spawnChunk.x, spawnChunk.z) { it == structure }
                 helper.assertTrue(
                     structure != null && starts.isNotEmpty(),
                     "Structure '$validStructId' not found via vanilla StructureManager in chunk $spawnChunk",
