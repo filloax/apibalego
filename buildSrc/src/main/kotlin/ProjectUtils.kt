@@ -34,10 +34,10 @@ class ProjectUtils(
             ":filloaxlib-${filloaxlibVersion}-${loader}"
         else if (useLocalMavenFilloaxLib)
             "com.filloax.filloaxlib:filloaxlib-${loader}:${filloaxlibVersion}"
-        else if (loader == "common")
+        else // if (loader == "common")
             "com.github.filloax.filloaxlib:filloaxlib-${loader}:${filloaxlibVersion}"
-        else
-            "maven.modrinth:filloaxlib:${filloaxlibVersion}-${loader}"
+//        else
+//            "maven.modrinth:filloaxlib:${filloaxlibVersion}-${loader}"
 
         println("Using fxlib $versionString")
 
