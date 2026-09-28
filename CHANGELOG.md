@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.1
+
+- Fix Resource pack download
+
 ## 0.4.0
 
 - Update to 26.3
