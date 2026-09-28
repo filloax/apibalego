@@ -7,7 +7,10 @@ import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.ruslan.apibalego.utils.RemoteDownloadUtils
 import kotlinx.serialization.Serializable
+import org.apache.logging.log4j.Level
 import net.minecraft.client.Minecraft
+import net.minecraft.server.packs.repository.PackRepository
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.io.path.createDirectories
@@ -20,8 +23,6 @@ import kotlin.streams.asSequence
  * resource packs pushed by the gamemaster into the apibalego resource pack folder
  * (see [PreloadPackSyncClient]), allows resource packs downloaded at game start to avoid requiring
  * a reload.
- *
- * Note that packs from [PreloadPackSyncClient] are "required", meaning they are always on if the file is present.
  */
 object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandler.PackDetails> {
     @Serializable
@@ -30,7 +31,9 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
         val version: String = "",
     )
 
-    data class PackCheckResult(val changed: Boolean, val retiredFileNames: List<String>)
+    data class PackCheckResult(val downloaded: Boolean, val expectedFileNames: Set<String>, val retiredFileNames: List<String>) {
+        val changed get() = downloaded || retiredFileNames.isNotEmpty()
+    }
 
     /**
      * Applies only after initial preload (which is before normal api sync)
@@ -49,13 +52,37 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
         if (!result.changed) return
 
         client.execute {
-            result.retiredFileNames.forEach { fileName -> dir.resolve(fileName).deleteIfExists() }
-
             val repo = client.resourcePackRepository
-            repo.reload()
-            // saves the current (required-pack-inclusive) selection to options, and reloads resources if it changed
+            deleteRetiredFiles(dir, result.retiredFileNames.filterNot { it in repo.selectedIds })
+
+            if (result.downloaded) repo.reload()
+
+            val wanted = selectionAfterSync(repo, result)
+            if (wanted == repo.selectedIds.toList()) return@execute
+
+            repo.setSelected(wanted)
+            // saves the new selection to options, and reloads resources since it changed
             client.options.updateResourcePacks(repo)
             ApibalegoMod.LOGGER.info("Resource pack sync: reloaded resources after gamemaster update")
+        }
+    }
+
+    private fun selectionAfterSync(repo: PackRepository, result: PackCheckResult): List<String> {
+        val selected = LinkedHashSet(repo.selectedIds)
+        selected.removeAll(result.retiredFileNames.toSet())
+        // packs that failed to download aren't in the repository, selecting them does nothing
+        selected.addAll(result.expectedFileNames.filter(repo::isAvailable))
+        return selected.toList()
+    }
+
+    // handle busy downloaded zips
+    private fun deleteRetiredFiles(dir: Path, fileNames: List<String>) {
+        fileNames.forEach { fileName ->
+            try {
+                dir.resolve(fileName).deleteIfExists()
+            } catch (e: IOException) {
+                ApibalegoMod.LOGGER.log(Level.DEBUG, "Could not delete retired resource pack file '$fileName' yet: ${e.message}")
+            }
         }
     }
 
@@ -65,7 +92,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
     fun checkAndDownloadResourcePacks(dir: Path, desired: Map<String, PackDetails>): PackCheckResult {
         dir.createDirectories()
 
-        var changed = false
+        var downloaded = false
         val expectedFileNames = mutableSetOf<String>()
 
         desired.forEach { (id, details) ->
@@ -84,7 +111,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
                 }
                 try {
                     RemoteDownloadUtils.downloadToFile(target, details.downloadUrl, ApiBalegoConfig.clientDataSyncApiKey)
-                    changed = true
+                    downloaded = true
                 } catch (e: Exception) {
                     ApibalegoMod.LOGGER.error("Failed to download resource pack '$id' from ${details.downloadUrl}: ${e.message}")
                 }
@@ -97,9 +124,7 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
                 .filter { it !in expectedFileNames }
                 .toList()
         }
-        if (retiredFileNames.isNotEmpty()) changed = true
-
-        return PackCheckResult(changed, retiredFileNames)
+        return PackCheckResult(downloaded, expectedFileNames, retiredFileNames)
     }
 
     private fun identity(details: PackDetails) = RemoteDownloadUtils.installIdentity(details.version, details.downloadUrl)

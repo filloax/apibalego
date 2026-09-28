@@ -19,7 +19,7 @@ class FabricClientTestDriver(private val context: ClientGameTestContext) : Clien
     override fun waitFor(message: String, timeoutTicks: Int, predicate: (Minecraft) -> Boolean) {
         try {
             context.waitFor({ client -> predicate(client) }, timeoutTicks)
-        } catch (e: Exception) {
+        } catch (e: AssertionError) {
             throw AssertionError("Timed out waiting for: $message", e)
         }
     }
