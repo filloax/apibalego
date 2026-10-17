@@ -2,7 +2,7 @@ modLoader="kotlinforforge"
 loaderVersion="${kotlinforge_version_range}"
 
 license="${license}"
-issueTrackerURL="https://github.com/filloax/ruins-of-growsseth/issues"
+issueTrackerURL="https://github.com/filloax/apibalego/issues"
 
 [[mixins]]
     config="apibalego.mixins.json"
@@ -11,10 +11,10 @@ issueTrackerURL="https://github.com/filloax/ruins-of-growsseth/issues"
     modId="${mod_id}"
     version="${version_prefix}-neoforge"
     displayName="${mod_name}"
-    displayURL="https://github.com/filloax/ruins-of-growsseth"
+    displayURL="https://github.com/filloax/apibalego"
     logoFile="${mod_icon}"
     authors="Filloax"
-    description='''Generic gamemaster/website connection layer extracted from Ruins of Growsseth.'''
+    description='''Gamemaster API to remotely interact with a singleplayer or multiplayer world''
 
 [[dependencies]]
     modId="neoforge"
