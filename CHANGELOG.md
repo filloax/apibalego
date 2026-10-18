@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.0
+
+- Fix neoforge, prepare for first release
+
 ## 0.4.1
 
 - Fix Resource pack download
