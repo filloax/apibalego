@@ -94,10 +94,6 @@ dependencies {
     utils.getFilloaxlib("neoforge").let{
         implementation(it) { exclude(module = "kotlin-stdlib") }
         jarJar(it)
-        // need this to fix dev runs (aka gametest)
-        // does not work as-is, as it makes it try to load a library as type accesstransformers, which
-        // does not work
-//        accessTransformers(it)
     }
     implementation( libs.kotlinevents )
     jarJar( libs.kotlinevents )

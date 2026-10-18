@@ -3,14 +3,14 @@
   "id": "apibalego",
   "version": "${version_prefix}-fabric",
   "name": "${mod_name}",
-  "description": "Generic gamemaster/website connection layer extracted from Ruins of Growsseth.",
+  "description": "Gamemaster API to remotely interact with a singleplayer or multiplayer world",
   "authors": [
     "Filloax"
   ],
   "contact": {
-    "homepage": "https://github.com/filloax/ruins-of-growsseth",
-    "issues": "https://github.com/filloax/ruins-of-growsseth/issues",
-    "source": "https://github.com/filloax/ruins-of-growsseth"
+    "homepage": "https://github.com/filloax/apibalego",
+    "issues": "https://github.com/filloax/apibalego/issues",
+    "source": "https://github.com/filloax/apibalego"
   },
   "license": "MIT",
   "icon": "assets/apibalego/icon.png",
