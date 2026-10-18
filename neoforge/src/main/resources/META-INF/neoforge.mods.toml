@@ -12,9 +12,9 @@ issueTrackerURL="https://github.com/filloax/apibalego/issues"
     version="${version_prefix}-neoforge"
     displayName="${mod_name}"
     displayURL="https://github.com/filloax/apibalego"
-    logoFile="${mod_icon}"
+    iconFile="${mod_icon}"
     authors="Filloax"
-    description='''Gamemaster API to remotely interact with a singleplayer or multiplayer world''
+    description='''Gamemaster API to remotely interact with a singleplayer or multiplayer world'''
 
 [[dependencies]]
     modId="neoforge"

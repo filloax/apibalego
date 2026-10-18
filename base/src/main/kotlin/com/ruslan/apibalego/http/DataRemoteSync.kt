@@ -143,7 +143,12 @@ object DataRemoteSync {
                     if (status < 300 && server.isRunning) {
                         didFirstLoad[name] = true
                         val content = response.body?.string() ?: ""
-                        saveToMemory(server, name, content)
+                        try {
+                            saveToMemory(server, name, content)
+                        } catch (e: Throwable) {
+                            logger.error("[$name] Failed to save to memory: ${e.stackTraceToString()}")
+                            return@use false
+                        }
                         logger.info("[$name] SUCCESS, STATUS: $status")
                         callbacks.forEach { it(content, server) }
                         true

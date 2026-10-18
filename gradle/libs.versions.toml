@@ -12,7 +12,7 @@
     neoform = "26.3-1" # vanilla neoforge configuration
 
 # Mod dependencies
-    filloaxlib = "0.42.0-26.3"
+    filloaxlib = "0.42.2-26.3"
     # optional: separate version for filloaxlib common, defaults to filloaxlib version if unset
 #    filloaxlibCommon = "0.42.0-26.3"
     modmenu = "21.0.0-beta.1"
@@ -47,10 +47,10 @@
 
 # Neoforge Settings
     # Get versions from https://projects.neoforged.net/neoforged/neoforge
-    neoforge = "26.3.0.3-beta"
-    neoforge-range = "[26.3.0.3-beta,26.4)"
-    kotlinforge = "6.3.0"
-    kotlinforge-range = "[6.2.0,)"
+    neoforge = "26.3.0.88"
+    neoforge-range = "[26.3.0.76,26.4)"
+    kotlinforge = "6.4.0"
+    kotlinforge-range = "[6.4.0,)"
 
 # Other dependencies
     mixin = "0.8.7"

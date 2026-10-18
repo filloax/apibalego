@@ -1,7 +1,5 @@
 # Apibalego
 
-> **WIP.** NeoForge support is currently untested, the "live update" features may not work there yet.
-
 Minecraft mod library providing a gamemaster API to remotely interact with a singleplayer / multiplayer world. Mainly
 intended for streamers or challenge runners with a particular goal that requires remote activation / management, or for
 roleplay purposes (with a Gamemaster placing specific structures, sending notifications, etc.)
@@ -27,7 +25,7 @@ Extracted from [Ruins of Growsseth](https://modrinth.com/mod/ruins-of-growsseth)
 
 ## Requirements
 
-- [FilloaxLib](https://modrinth.com/mod/filloaxlib)
+- [FilloaxLib](https://modrinth.com/mod/filloaxlib) (Bundled, not needed to download)
 - [ResourcefulConfig](https://modrinth.com/mod/resourceful-config) 
 
 ## Configuration
@@ -72,10 +70,12 @@ LiveUpdatesEventRegistry.register("my-event") { data ->
 }
 ```
 
-## AI usage disclaimer
+---
 
-AI was not used for the initial API development in Ruins of Growsseth. It was used here to
-- assist in porting the mod to newer versions
-- creating unit tests and gametests to be extra sure (the mod was also normally playtested as usual, 
-  testing was not left solely to AI-ran tests, dw)
-- initial setup of readme (you may notice em dashes in prevous commits of the readme lol)
+> #### AI usage disclaimer
+>
+> AI was not used for the actual API development in Ruins of Growsseth. It was used here to
+> - assist in porting the mod to newer versions
+> - creating unit tests and gametests to be extra sure (the mod was also normally playtested as usual, 
+>   testing was not left solely to AI-ran tests, dw)
+> - initial setup of readme (you may notice em dashes in previous commits of the readme lol)
