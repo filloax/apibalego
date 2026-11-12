@@ -75,6 +75,10 @@ object ToastHandler : ApiEntryHandler<ToastHandler.ToastData> {
         }
     }
 
+    override fun handleApiUpdatePlayer(player: ServerPlayer, entries: Collection<ApiEntry<ToastData>>) {
+        handleApiJoin(player, entries)
+    }
+
     private fun sendAllCustomToastEvent(entry: ApiEntry<ToastData>, server: MinecraftServer) {
         val toast = entry.details!!
         val packet = toast.toPacket()

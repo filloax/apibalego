@@ -9,6 +9,8 @@ import com.ruslan.apibalego.http.ApiEntryRaw;
 import com.ruslan.apibalego.http.ApiEntryRegistry;
 import com.ruslan.apibalego.http.ApiEntryType;
 import com.ruslan.apibalego.socket.ResponseSender;
+import com.ruslan.apibalego.trigger.TriggerRegistry;
+import com.ruslan.apibalego.trigger.TriggerTypeHandler;
 import kotlinx.serialization.json.Json;
 import kotlinx.serialization.json.JsonElement;
 import net.minecraft.resources.Identifier;
@@ -21,7 +23,9 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 public class ApibalegoJavaUsageTest {
@@ -159,5 +163,30 @@ public class ApibalegoJavaUsageTest {
         event.dispatch("", server, mock(ResponseSender.class));
 
         assertEquals(true, called.get());
+    }
+
+    @Test
+    void handlersAreSharedUnlessSpecified() {
+        var sharedKey = Identifier.fromNamespaceAndPath("unittest", "java_shared_" + System.nanoTime());
+        var playerKey = Identifier.fromNamespaceAndPath("unittest", "java_player_" + System.nanoTime());
+        ApiEntryHandler<TestDetails> handler = (handlerServer, entries) -> {};
+
+        Apibalego.registerApiHandler(sharedKey, TestDetails.CODEC, TestDetails.class, handler);
+        Apibalego.registerApiHandler(playerKey, TestDetails.CODEC, TestDetails.class, handler, false);
+
+        assertTrue(ApiEntryRegistry.INSTANCE.lookupRaw(sharedKey).getAlwaysShared());
+        assertFalse(ApiEntryRegistry.INSTANCE.lookupRaw(playerKey).getAlwaysShared());
+    }
+
+    @Test
+    void triggerTypesCanBeRegistered() {
+        var key = Identifier.fromNamespaceAndPath("unittest", "java_trigger_" + System.nanoTime());
+        TriggerTypeHandler<String> handler = (player, details) -> "run";
+
+        Apibalego.registerTriggerType(key, null, handler, String.class);
+
+        var type = TriggerRegistry.INSTANCE.lookupRaw(key);
+        assertEquals(key, type.getKey());
+        assertFalse(type.getHasDetails());
     }
 }

@@ -10,6 +10,7 @@ import com.ruslan.apibalego.http.BuiltinApiHandlers
 import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.network.ApiBalegoPackets
 import com.ruslan.apibalego.socket.BuiltinLiveUpdateEvents
+import com.ruslan.apibalego.trigger.BuiltinTriggers
 import com.ruslan.apibalego.utils.ApibalegoLogger
 import org.apache.logging.log4j.LogManager
 import java.nio.file.Path
@@ -43,6 +44,7 @@ object ApibalegoMod {
 
         ApiBalegoConfigHandler.initConfig()
         BuiltinApiHandlers.registerAll()
+        BuiltinTriggers.registerAll()
     }
 
     @JvmStatic

@@ -6,6 +6,7 @@ import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLevelEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerLifecycleEvents
 import net.fabricmc.fabric.api.event.lifecycle.v1.ServerTickEvents
+import net.fabricmc.fabric.api.entity.event.v1.ServerPlayerEvents
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents
 import net.minecraft.commands.CommandBuildContext
 import net.minecraft.commands.CommandSourceStack
@@ -25,6 +26,10 @@ class FabricEventsApiBalego : ApiBalegoModEvents() {
 
     override fun onPlayerServerJoin(event: (ServerPlayer) -> Unit) = ServerPlayConnectionEvents.JOIN.register { handler, _, _ ->
         event(handler.player)
+    }
+
+    override fun onPlayerRespawn(event: (ServerPlayer, Boolean) -> Unit) = ServerPlayerEvents.AFTER_RESPAWN.register { _, newPlayer, alive ->
+        event(newPlayer, alive)
     }
 
     override fun onRegisterCommands(event: (CommandDispatcher<CommandSourceStack>, CommandBuildContext, CommandSelection) -> Unit) = CommandRegistrationCallback.EVENT.register { dispatcher, ctx, selection ->

@@ -416,6 +416,9 @@ object ApibalegoGameTests {
         sequence = commandDispatchStep(helper, sequence)
         sequence = structureHandlerStep(helper, sequence)
         sequence = datapackHandlerStep(helper, sequence)
+        sequence = TriggerGameTests.playerScopedStep(helper, sequence)
+        sequence = TriggerGameTests.builtinTriggersStep(helper, sequence)
+        sequence = TriggerGameTests.triggerFlowStep(helper, sequence)
         sequence.thenSucceed()
     }
 }
