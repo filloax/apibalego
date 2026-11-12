@@ -3,8 +3,10 @@
   "package": "com.ruslan.apibalego.mixin",
   "compatibilityLevel": "JAVA_17",
   "mixins": [
+    "PlayerAdvancementsMixin"
   ],
   "client": [
+    "client.OptionsMixin",
     "client.SplashManagerMixin"
   ],
   "injectors": {

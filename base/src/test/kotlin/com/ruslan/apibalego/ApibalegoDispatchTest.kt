@@ -1,5 +1,7 @@
 package com.ruslan.apibalego
 
+import com.ruslan.apibalego.http.ApiEntry
+import com.ruslan.apibalego.http.ApiEntryHandler
 import com.ruslan.apibalego.http.ApiEntryRaw
 import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.socket.BuiltinLiveUpdateEvents
@@ -11,12 +13,20 @@ import net.minecraft.SharedConstants
 import net.minecraft.resources.Identifier
 import net.minecraft.server.Bootstrap
 import net.minecraft.server.MinecraftServer
+import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
+import net.minecraft.server.players.PlayerList
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.Test
+import kotlinx.serialization.json.Json
+import org.mockito.kotlin.any
+import org.mockito.kotlin.doAnswer
+import org.mockito.kotlin.doReturn
 import org.mockito.kotlin.mock
+import java.util.UUID
 import java.util.concurrent.atomic.AtomicInteger
 
 // JUnit for things that do not require gametests
@@ -108,5 +118,110 @@ class ApibalegoDispatchTest {
         ApiEntryRegistry.dispatchJoin(entries.filter { it.active }, mock<ServerPlayer>())
 
         assertEquals(0, counter.get(), "Inactive join entry must not be dispatched")
+    }
+
+    private class RecordingHandler : ApiEntryHandler<Nothing> {
+        val updates = mutableListOf<List<String>>()
+        val playerUpdates = mutableListOf<Pair<ServerPlayer, List<String>>>()
+
+        override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<Nothing>>) {
+            updates.add(entries.map { it.id })
+        }
+
+        override fun handleApiUpdatePlayer(player: ServerPlayer, entries: Collection<ApiEntry<Nothing>>) {
+            playerUpdates.add(player to entries.map { it.id })
+        }
+    }
+
+    private fun registerRecording(name: String, alwaysShared: Boolean = true): Pair<RecordingHandler, com.ruslan.apibalego.http.ApiEntryType<*>> {
+        val key = Identifier.fromNamespaceAndPath("unittest", "${name}_${System.nanoTime()}")
+        val handler = RecordingHandler()
+        ApiEntryRegistry.register(key, null, handler, Nothing::class, alwaysShared)
+        return handler to ApiEntryRegistry.lookupRaw(key)
+    }
+
+    /** Server mock that runs [MinecraftServer.execute] tasks immediately and knows the given players */
+    private fun serverWithPlayers(vararg players: ServerPlayer): MinecraftServer {
+        val playerList = mock<PlayerList> {
+            players.forEach { p -> on { getPlayer(p.uuid) } doReturn p }
+        }
+        return mock<MinecraftServer> {
+            on { execute(any()) } doAnswer { (it.arguments[0] as Runnable).run() }
+            on { this.playerList } doReturn playerList
+        }
+    }
+
+    private fun mockPlayer(): ServerPlayer {
+        val uuid = UUID.randomUUID()
+        return mock<ServerPlayer> { on { getUUID() } doReturn uuid }
+    }
+
+    @Test
+    fun `dispatchUpdate with onlyTypes only calls those types`() {
+        val (included, includedType) = registerRecording("only_included")
+        val (excluded, excludedType) = registerRecording("only_excluded")
+
+        ApiEntryRegistry.dispatchUpdate(
+            listOf(ApiEntryRaw(type = includedType, id = "a"), ApiEntryRaw(type = excludedType, id = "b")),
+            mock<MinecraftServer>(),
+            listOf(includedType),
+        )
+
+        assertEquals(listOf(listOf("a")), included.updates)
+        assertTrue(excluded.updates.isEmpty(), "Type not in onlyTypes must not be called, got ${excluded.updates}")
+    }
+
+    @Test
+    fun `player entries are sent to their player only, not to the global update`() {
+        val (handler, type) = registerRecording("player_entries", alwaysShared = false)
+        val p1 = mockPlayer()
+        val p2 = mockPlayer()
+        val offline = UUID.randomUUID()
+
+        ApiEntryRegistry.dispatchUpdate(
+            listOf(
+                ApiEntryRaw(type = type, id = "global"),
+                ApiEntryRaw(type = type, id = "p1-a", forPlayer = p1.uuid),
+                ApiEntryRaw(type = type, id = "p1-b", forPlayer = p1.uuid),
+                ApiEntryRaw(type = type, id = "p2", forPlayer = p2.uuid),
+                ApiEntryRaw(type = type, id = "offline", forPlayer = offline),
+            ),
+            serverWithPlayers(p1, p2),
+            listOf(type),
+        )
+
+        assertEquals(listOf(listOf("global")), handler.updates)
+        assertEquals(
+            setOf(p1 to listOf("p1-a", "p1-b"), p2 to listOf("p2")),
+            handler.playerUpdates.toSet(),
+        )
+    }
+
+    @Test
+    fun `default player update falls back to the global update`() {
+        val received = mutableListOf<String>()
+        val handler = object : ApiEntryHandler<Nothing> {
+            override fun handleApiUpdate(server: MinecraftServer, entries: Collection<ApiEntry<Nothing>>) {
+                received.addAll(entries.map { it.id })
+            }
+        }
+        val key = Identifier.fromNamespaceAndPath("unittest", "player_fallback_${System.nanoTime()}")
+        ApiEntryRegistry.register(key, null, handler, Nothing::class, alwaysShared = false)
+        val type = ApiEntryRegistry.lookupRaw(key)
+        val server = mock<MinecraftServer>()
+        val level = mock<ServerLevel> { on { this.server } doReturn server }
+        val player = mock<ServerPlayer> { on { level() } doReturn level }
+
+        type.dispatchUpdatePlayer(listOf(ApiEntryRaw(type = type, id = "x")), player)
+
+        assertEquals(listOf("x"), received)
+    }
+
+    @Test
+    fun `forPlayer is not serialized`() {
+        val (_, type) = registerRecording("transient_player")
+        val json = Json.encodeToString(ApiEntryRaw.serializer(), ApiEntryRaw(type = type, id = "x", forPlayer = UUID.randomUUID()))
+
+        assertFalse("forPlayer" in json, "forPlayer must be transient, got $json")
     }
 }

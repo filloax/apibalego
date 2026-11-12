@@ -1,5 +1,6 @@
 package com.ruslan.apibalego.http
 
+import com.ruslan.apibalego.ApibalegoMod
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.PrimitiveKind
 import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
@@ -15,6 +16,11 @@ abstract class AbstractApiEntryType<T : Any> (
     val key: Identifier,
     val detailsParser: ApiDetailsParser<T>?,
     val detailsType: KClass<T>,
+    /**
+     * If true, this api entry type is always tracked globally to avoid repetition
+     * (some things like triggers track it per-player)
+     */
+    val alwaysShared: Boolean = true,
 ) {
     /** Set only for types registered with a kotlinx serializer, see [detailsParser]. */
     val detailsDeserializer: KSerializer<T>?
@@ -35,13 +41,18 @@ class ApiEntryType<T : Any> internal constructor(
     detailsParser: ApiDetailsParser<T>?,
     val handler: ApiEntryHandler<T>,
     detailsType: KClass<T>,
-) : AbstractApiEntryType<T>(key, detailsParser, detailsType) {
+    alwaysShared: Boolean = true,
+) : AbstractApiEntryType<T>(key, detailsParser, detailsType, alwaysShared) {
     fun dispatchUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
         handler.handleApiUpdate(server, entries.map { it.resolve(this, parseDetails(it)) })
     }
 
     fun dispatchJoin(entries: Collection<ApiEntryRaw>, player: ServerPlayer) {
         handler.handleApiJoin(player, entries.map { it.resolve(this, parseDetails(it)) })
+    }
+
+    fun dispatchUpdatePlayer(entries: Collection<ApiEntryRaw>, player: ServerPlayer) {
+        handler.handleApiUpdatePlayer(player, entries.map { it.resolve(this, parseDetails(it)) })
     }
 }
 
@@ -58,6 +69,14 @@ interface ApiEntryHandler<T : Any> {
     fun handleApiJoin(player: ServerPlayer, entries: Collection<ApiEntry<T>>) {
         // do nothing on join by default
     }
+
+    /**
+     * Used for triggers, runs events for a specific player. Only called for types that are not
+     * [AbstractApiEntryType.alwaysShared]
+     */
+    fun handleApiUpdatePlayer(player: ServerPlayer, entries: Collection<ApiEntry<T>>) {
+        handleApiUpdate(player.level().server, entries)
+    }
 }
 
 //#region registry
@@ -65,19 +84,28 @@ interface ApiEntryHandler<T : Any> {
 object ApiEntryRegistry {
     private val registry = mutableMapOf<Identifier, ApiEntryType<*>>()
 
+
+    /**
+     * @param alwaysShared If true, this api entry type is always tracked globally to avoid repetition
+     *                     (some things like triggers track it per-player)
+     */
     fun <T : Any>register(
         key: Identifier,
         // if null, type has no extra info
         detailsDeserializer: KSerializer<T>?,
         handler: ApiEntryHandler<T>,
         detailsClass: KClass<T>,
+        alwaysShared: Boolean = true,
     ) {
-        registerWithParser(key, detailsDeserializer?.let { ApiDetailsParser.Kotlinx(it) }, handler, detailsClass)
+        registerWithParser(key, detailsDeserializer?.let { ApiDetailsParser.Kotlinx(it) }, handler, detailsClass, alwaysShared)
     }
 
     /**
      * Lower level [register], for details in formats other than kotlinx serialization:
      * Minecraft Codecs, gson-parsed classes, raw json (see [ApiDetailsParser]).
+     *
+     * @param alwaysShared If true, this api entry type is always tracked globally to avoid repetition
+     *                     (some things like triggers track it per-player)
      */
     fun <T : Any>registerWithParser(
         key: Identifier,
@@ -85,17 +113,23 @@ object ApiEntryRegistry {
         detailsParser: ApiDetailsParser<T>?,
         handler: ApiEntryHandler<T>,
         detailsClass: KClass<T>,
+        alwaysShared: Boolean = true,
     ) {
-        registry[key] = ApiEntryType(key, detailsParser, handler, detailsClass)
+        registry[key] = ApiEntryType(key, detailsParser, handler, detailsClass, alwaysShared)
     }
 
+    /**
+     * @param alwaysShared If true, this api entry type is always tracked globally to avoid repetition
+     *                     (some things like triggers track it per-player)
+     */
     inline fun <reified T : Any>register(
         key: Identifier,
         // if null, type has no extra info
         detailsDeserializer: KSerializer<T>?,
         handler: ApiEntryHandler<T>,
+        alwaysShared: Boolean = true,
     ) {
-        register(key, detailsDeserializer, handler, T::class)
+        register(key, detailsDeserializer, handler, T::class, alwaysShared)
     }
 
     fun registerSimple(
@@ -124,10 +158,30 @@ object ApiEntryRegistry {
 
     fun all(): Map<Identifier, ApiEntryType<*>> = registry
 
-    fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer) {
-        val byType = all.groupBy { it.type }
-        registry.values.forEach { type ->
+    fun dispatchUpdate(all: Collection<ApiEntryRaw>, server: MinecraftServer, onlyTypes: Collection<ApiEntryType<*>>? = null) {
+        // player entries are generated by things such as triggers
+        val (playerEntries, globalEntries) = all
+            .filter { onlyTypes == null || it.type in onlyTypes }
+            .partition { it.forPlayer != null }
+        val byType = globalEntries.groupBy { it.type }
+        registry.values.filter { onlyTypes == null || it in onlyTypes }.forEach { type ->
             type.dispatchUpdate(byType[type] ?: emptyList(), server)
+        }
+        if (playerEntries.isNotEmpty()) {
+            server.execute { dispatchPlayerUpdate(playerEntries, server) }
+        }
+    }
+
+    private fun dispatchPlayerUpdate(entries: Collection<ApiEntryRaw>, server: MinecraftServer) {
+        entries.groupBy { it.forPlayer }.forEach { (uuid, playerEntries) ->
+            val player = uuid?.let(server.playerList::getPlayer) ?: return@forEach
+            playerEntries.groupBy { it.type }.forEach { (type, typeEntries) ->
+                try {
+                    type.dispatchUpdatePlayer(typeEntries, player)
+                } catch (e: Exception) {
+                    ApibalegoMod.LOGGER.error("Error dispatching $type entries for player ${player.scoreboardName}", e)
+                }
+            }
         }
     }
 

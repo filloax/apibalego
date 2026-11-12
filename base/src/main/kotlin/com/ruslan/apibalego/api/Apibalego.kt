@@ -10,6 +10,9 @@ import com.ruslan.apibalego.socket.LiveUpdatesEvent
 import com.ruslan.apibalego.socket.LiveUpdatesEventHandler
 import com.ruslan.apibalego.socket.LiveUpdatesEventRegistry
 import com.ruslan.apibalego.socket.ResponseSender
+import com.ruslan.apibalego.trigger.TriggerHandler
+import com.ruslan.apibalego.trigger.TriggerRegistry
+import com.ruslan.apibalego.trigger.TriggerTypeHandler
 import kotlinx.serialization.KSerializer
 import net.minecraft.resources.Identifier
 import net.minecraft.server.MinecraftServer
@@ -28,48 +31,64 @@ object Apibalego {
     /**
       Use this in Kotlin mods, pass for deserializer for example
       MyDetailsClass.serializer()
+
+      @param alwaysShared If false, events of this type can run per-player when inside triggers,
+        via [ApiEntryHandler.handleApiUpdatePlayer]
      */
     inline fun <reified T : Any>registerApiHandler(
         key: Identifier,
         // if null, type has no extra info
         detailsDeserializer: KSerializer<T>?,
         handler: ApiEntryHandler<T>,
+        alwaysShared: Boolean = true,
     ) {
-        ApiEntryRegistry.register(key, detailsDeserializer, handler)
+        ApiEntryRegistry.register(key, detailsDeserializer, handler, alwaysShared)
     }
 
     /**
      * Use Minecraft Codecs to parse `details`.
+     *
+     * @param alwaysShared If false, events of this type can run per-player when inside triggers,
+     *   via [ApiEntryHandler.handleApiUpdatePlayer]
      */
     @JvmStatic
+    @JvmOverloads
     fun <T : Any> registerApiHandler(
         key: Identifier,
         detailsCodec: Codec<T>,
         detailsClass: Class<T>,
         handler: ApiEntryHandler<T>,
+        alwaysShared: Boolean = true,
     ) {
         ApiEntryRegistry.registerWithParser(
             key,
             ApiDetailsParser.FromCodec(detailsCodec),
             handler,
             detailsClass.kotlin,
+            alwaysShared,
         )
     }
 
     /**
      * Use gson to parse `details` as the class.
+     *
+     * @param alwaysShared If false, events of this type can run per-player when inside triggers,
+     *   via [ApiEntryHandler.handleApiUpdatePlayer]
      */
     @JvmStatic
+    @JvmOverloads
     fun <T : Any> registerApiHandler(
         key: Identifier,
         detailsClass: Class<T>,
         handler: ApiEntryHandler<T>,
+        alwaysShared: Boolean = true,
     ) {
         ApiEntryRegistry.registerWithParser(
             key,
             ApiDetailsParser.FromClass(detailsClass),
             handler,
             detailsClass.kotlin,
+            alwaysShared,
         )
     }
 
@@ -113,6 +132,34 @@ object Apibalego {
             { server, entries -> updateHandler.accept(server, entries) },
             joinHandler?.let { { player, entries -> it.accept(player, entries) } },
         )
+    }
+
+    //#endregion
+
+    //#region triggers
+
+    /**
+     * Register a trigger type, usable in "trigger" api entries. Call [runTrigger] when
+     * the trigger condition might have changed (e.g. from a mod event).
+     */
+    @JvmStatic
+    fun <T : Any> registerTriggerType(
+        key: Identifier,
+        // if null, type has no extra info
+        detailsDeserializer: KSerializer<T>?,
+        handler: TriggerTypeHandler<T>,
+        detailsClass: Class<T>,
+    ) {
+        TriggerRegistry.register(key, detailsDeserializer, handler, detailsClass.kotlin)
+    }
+
+    /**
+     * Check triggers of this type for the player and run their events. Must be called after the
+     * state used by the trigger's [TriggerTypeHandler.runKey] is updated.
+     */
+    @JvmStatic
+    fun runTrigger(player: ServerPlayer, key: Identifier) {
+        TriggerHandler.runTrigger(player, key)
     }
 
     //#endregion

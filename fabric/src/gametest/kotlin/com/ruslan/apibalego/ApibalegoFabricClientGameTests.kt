@@ -42,3 +42,8 @@ class ResourcePackClientGameTest : FabricClientGameTest {
     override fun runTest(context: ClientGameTestContext) =
         ApibalegoClientGameTests.resourcePackFullLifecycle(FabricClientTestDriver(context))
 }
+
+class PreloadResourcePackClientGameTest : FabricClientGameTest {
+    override fun runTest(context: ClientGameTestContext) =
+        ApibalegoClientGameTests.preloadedResourcePackSelected(FabricClientTestDriver(context))
+}

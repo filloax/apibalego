@@ -9,6 +9,7 @@ import net.minecraft.server.MinecraftServer
 import net.minecraft.server.level.ServerLevel
 import net.minecraft.server.level.ServerPlayer
 import net.neoforged.neoforge.event.RegisterCommandsEvent
+import net.neoforged.neoforge.event.entity.player.PlayerEvent
 import net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedInEvent
 import net.neoforged.neoforge.event.level.LevelEvent
 import net.neoforged.neoforge.event.server.ServerStartingEvent
@@ -43,6 +44,15 @@ class NeoEventsApiBalego : ApiBalegoModEvents() {
             val player = ev.entity
             if (player is ServerPlayer) {
                 event(player)
+            }
+        }
+    }
+
+    override fun onPlayerRespawn(event: (ServerPlayer, Boolean) -> Unit) {
+        FORGE_BUS.addListener<PlayerEvent.PlayerRespawnEvent> { ev ->
+            val player = ev.entity
+            if (player is ServerPlayer) {
+                event(player, ev.isEndConquered)
             }
         }
     }

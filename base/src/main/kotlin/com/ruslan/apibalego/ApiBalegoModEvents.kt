@@ -10,6 +10,7 @@ import com.ruslan.apibalego.http.ApiEntryRegistry
 import com.ruslan.apibalego.http.DataRemoteSync
 import com.ruslan.apibalego.http.GamemasterApi
 import com.ruslan.apibalego.socket.LiveUpdatesConnection
+import com.ruslan.apibalego.trigger.RespawnTriggerHandler
 import net.minecraft.commands.CommandBuildContext
 import net.minecraft.commands.CommandSourceStack
 import net.minecraft.commands.Commands.CommandSelection
@@ -45,6 +46,9 @@ abstract class ApiBalegoModEvents {
         onPlayerServerJoin { player ->
             GamemasterApi.Callbacks.onPlayerJoin(player)
         }
+        onPlayerRespawn { player, endConquered ->
+            if (!endConquered) RespawnTriggerHandler.onRespawn(player)
+        }
         onRegisterCommands { dispatcher, ctx, selection ->
             GamemasterCommand.register(dispatcher, ctx, selection)
         }
@@ -55,5 +59,6 @@ abstract class ApiBalegoModEvents {
     abstract fun onServerLevelLoad(event: (MinecraftServer, ServerLevel) -> Unit)
     abstract fun onStartServerTick(event: ServerEvent)
     abstract fun onPlayerServerJoin(event: (player: ServerPlayer) -> Unit)
+    abstract fun onPlayerRespawn(event: (player: ServerPlayer, endConquered: Boolean) -> Unit)
     abstract fun onRegisterCommands(event: (dispatcher: CommandDispatcher<CommandSourceStack>, ctx: CommandBuildContext, selection: CommandSelection) -> Unit)
 }
