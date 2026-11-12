@@ -76,13 +76,14 @@ dependencies {
 
 	listOf(
 		libs.fabric.kotlin,
-		libs.modmenu,
 		utils.getResourcefulConfig("fabric"),
 	).forEach {
 		implementation(it)
 		if (includeDeps)
 			include(it)
 	}
+
+	localRuntime(libs.modmenu)
 
 	implementation( libs.kotlin.serialization ) { exclude(module = "kotlin-stdlib") }
 
