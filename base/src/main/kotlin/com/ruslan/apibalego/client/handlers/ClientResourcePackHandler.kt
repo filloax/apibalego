@@ -49,7 +49,6 @@ object ClientResourcePackHandler : ClientApiEntryHandler<ClientResourcePackHandl
         val desired = entries.filter { it.active }.associate { it.id to it.details!! }
         // download on the sync thread, only touch the pack repository on the client thread
         val result = checkAndDownloadResourcePacks(dir, desired)
-        if (!result.changed) return
 
         client.execute {
             val repo = client.resourcePackRepository

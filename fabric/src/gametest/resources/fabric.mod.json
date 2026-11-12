@@ -28,6 +28,10 @@
       {
         "value": "com.ruslan.apibalego.ResourcePackClientGameTest",
         "adapter": "kotlin"
+      },
+      {
+        "value": "com.ruslan.apibalego.PreloadResourcePackClientGameTest",
+        "adapter": "kotlin"
       }
     ]
   }

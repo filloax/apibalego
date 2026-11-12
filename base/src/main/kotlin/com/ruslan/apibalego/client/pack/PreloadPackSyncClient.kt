@@ -11,7 +11,9 @@ import com.ruslan.apibalego.http.HttpFetcher
 import com.ruslan.apibalego.pack.ApibalegoRepositorySource
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.json.Json
+import net.minecraft.client.Options
 import net.minecraft.server.packs.PackType
+import net.minecraft.server.packs.repository.PackRepository
 import java.net.URLEncoder
 import java.nio.file.Path
 
@@ -22,6 +24,7 @@ import java.nio.file.Path
 object PreloadPackSyncClient {
     private val json = Json { ignoreUnknownKeys = true }
     private val httpFetcher = HttpFetcher("apibalego-preload-client", ApibalegoMod.LOGGER)
+    private var preloadedFileNames: Set<String> = emptySet()
 
     fun clientResourcePackDir(): Path = ApibalegoMod.gameDir.resolve("apibalego/resourcepacks")
 
@@ -44,7 +47,16 @@ object PreloadPackSyncClient {
             .map { raw -> raw.resolve(type, type.parseDetails(raw)) }
         val desired = entries.filter { it.active }.associate { it.id to it.details!! }
 
-        ClientResourcePackHandler.checkAndDownloadResourcePacks(clientResourcePackDir(), desired)
+        preloadedFileNames = ClientResourcePackHandler.checkAndDownloadResourcePacks(clientResourcePackDir(), desired).expectedFileNames
+    }
+
+    fun enablePreloadedPacks(options: Options, repo: PackRepository) {
+        val toAdd = preloadedFileNames.filter { repo.isAvailable(it) && it !in repo.selectedIds }
+        if (toAdd.isEmpty()) return
+
+        repo.setSelected(repo.selectedIds + toAdd)
+        toAdd.filterNot(options.resourcePacks::contains).forEach(options.resourcePacks::add)
+        ApibalegoMod.LOGGER.info("Preload resource pack sync: enabled ${toAdd.size} gamemaster resource pack(s)")
     }
 
     private fun urlEncode(s: String) = URLEncoder.encode(s, "UTF-8")

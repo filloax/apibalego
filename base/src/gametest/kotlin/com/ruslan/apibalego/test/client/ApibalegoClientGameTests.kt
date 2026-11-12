@@ -11,6 +11,8 @@ import com.ruslan.apibalego.client.http.ID_CLIENT_API_HANDLER_TOAST
 import com.ruslan.apibalego.client.pack.PreloadPackSyncClient
 import com.ruslan.apibalego.config.ApiBalegoConfig
 import com.sun.net.httpserver.HttpServer
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.add
 import kotlinx.serialization.json.buildJsonArray
@@ -147,6 +149,75 @@ object ApibalegoClientGameTests {
     }
 
     private fun packIdentity(version: String, downloadUrl: String) = "${version}_${downloadUrl.hashCode()}"
+
+    /**
+     * Packs downloaded by the startup preload must end up enabled, not just available: vanilla
+     * applies the options.txt selection after the preload, so without OptionsMixin they'd stay off.
+     * The preload normally runs during PackRepository construction, before any test can configure
+     * a gamemaster, so this calls it directly and then replays vanilla's startup selection step.
+     */
+    fun preloadedResourcePackSelected(driver: ClientTestDriver) {
+        val prevDataSync = ApiBalegoConfig.clientDataSync
+        val prevPackSync = ApiBalegoConfig.clientResourcePackSync
+        val prevUrl = ApiBalegoConfig.clientDataSyncUrl
+        val (prevSelected, prevOptionPacks) = driver.onClient {
+            it.resourcePackRepository.selectedIds.toList() to it.options.resourcePacks.toList()
+        }
+
+        val zipBytes = buildResourcePackZipBytes()
+        val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
+        val baseUrl = "http://127.0.0.1:${server.address.port}"
+        val entryId = "gt-rp-preload-${System.nanoTime()}"
+        val url = "$baseUrl/pack.zip"
+        val syncBody = Json.encodeToString(ListSerializer(ClientApiEntryRaw.serializer()), listOf(packEntry(entryId, url)))
+            .toByteArray()
+        server.createContext("/pack.zip") { exchange ->
+            exchange.sendResponseHeaders(200, zipBytes.size.toLong())
+            exchange.responseBody.use { it.write(zipBytes) }
+        }
+        server.createContext("/${ApiBalegoConfig.clientDataSyncEndpoint}") { exchange ->
+            exchange.sendResponseHeaders(200, syncBody.size.toLong())
+            exchange.responseBody.use { it.write(syncBody) }
+        }
+        server.start()
+
+        val packId = "apibalego_rp_${entryId}_${packIdentity("1", url)}.zip"
+        val packFile = PreloadPackSyncClient.clientResourcePackDir().resolve(packId)
+        try {
+            ApiBalegoConfig.clientDataSync = true
+            ApiBalegoConfig.clientResourcePackSync = true
+            // same origin as the download, so no external URL permission needed
+            ApiBalegoConfig.clientDataSyncUrl = baseUrl
+
+            PreloadPackSyncClient.preloadClientResourcePacks()
+            check(Files.exists(packFile)) { "preload should have downloaded $packId" }
+
+            driver.onClient { mc ->
+                val repo = mc.resourcePackRepository
+                repo.reload()
+                check(repo.isAvailable(packId)) { "preloaded pack should be available after a repository scan" }
+                check(packId !in repo.selectedIds) { "pack should not be selected before the startup selection step" }
+
+                mc.options.loadSelectedResourcePacks(repo)
+                check(packId in repo.selectedIds) { "preloaded pack should be enabled after startup selection" }
+                check(packId in mc.options.resourcePacks) { "preloaded pack should be saved to options for offline launches" }
+            }
+        } finally {
+            server.stop(0)
+            ApiBalegoConfig.clientDataSync = prevDataSync
+            ApiBalegoConfig.clientResourcePackSync = prevPackSync
+            ApiBalegoConfig.clientDataSyncUrl = prevUrl
+            // selection was only changed in the repository, resources were never reloaded with
+            // the pack, so its zip isn't held open and can be deleted right away
+            driver.onClient { mc ->
+                mc.resourcePackRepository.setSelected(prevSelected)
+                mc.options.resourcePacks.clear()
+                mc.options.resourcePacks.addAll(prevOptionPacks)
+                Files.deleteIfExists(packFile)
+                mc.resourcePackRepository.reload()
+            }
+        }
+    }
 
     /**
      * Client counterpart of the server datapack lifecycle test: rejected while external URLs are

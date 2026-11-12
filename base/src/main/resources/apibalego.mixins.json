@@ -5,6 +5,7 @@
   "mixins": [
   ],
   "client": [
+    "client.OptionsMixin",
     "client.SplashManagerMixin"
   ],
   "injectors": {
