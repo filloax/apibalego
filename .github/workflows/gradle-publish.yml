@@ -1,5 +1,10 @@
 #   "chore: release": all targets
-#   "chore: release(modrinth)": only x platform (github, modrinth)on:
+#   "chore: release(modrinth)": only x platform (github, curseforge, modrinth)
+env:
+  CURSEFORGE_ID: "1752909"
+  # TODO, for now mc publish just skips it
+  MODRINTH_ID: ""
+
 on:
   workflow_dispatch:
   push:
@@ -20,15 +25,15 @@ jobs:
       mc_version_range: ${{ steps.mc_version_range.outputs.value }}
       github: ${{ steps.targets.outputs.github }}
       curseforge: ${{ steps.targets.outputs.curseforge }}
+      modrinth: ${{ steps.targets.outputs.modrinth }}
 
     steps:
     - name: Read release targets
       id: targets
       env:
         COMMIT_MSG: ${{ github.event.head_commit.message }}
-      # todo add modrinth when they approve proj
       run: |
-        ALL="github curseforge"
+        ALL="github curseforge modrinth"
         TARGETS=$(grep -o -m1 'chore: release([^)]*)' <<< "$COMMIT_MSG" | sed 's/.*(\(.*\))/\1/' | tr ',' ' ' || true)
         TARGETS=${TARGETS:-$ALL}
         for t in $TARGETS; do
@@ -149,7 +154,7 @@ jobs:
   release-platform:
     name: Publish (${{ matrix.name }})
     needs: build
-    if: needs.build.outputs.curseforge == 'true'
+    if: needs.build.outputs.curseforge == 'true' || needs.build.outputs.modrinth == 'true'
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -178,8 +183,10 @@ jobs:
     - name: Publish
       uses: Kir-Antipov/mc-publish@v3.3
       with:
-        curseforge-token: ${{ secrets.TOKEN_CURSEFORGE }}
-        curseforge-id: 1752909
+        curseforge-token: ${{ needs.build.outputs.curseforge == 'true' && env.CURSEFORGE_ID != '' && secrets.TOKEN_CURSEFORGE || '' }}
+        curseforge-id: ${{ env.CURSEFORGE_ID }}
+        modrinth-token: ${{ needs.build.outputs.modrinth == 'true' && env.MODRINTH_ID != '' && secrets.TOKEN_MODRINTH || '' }}
+        modrinth-id: ${{ env.MODRINTH_ID }}
         name: Apibalego ${{ needs.build.outputs.version }} - ${{ needs.build.outputs.mc_version }} ${{ matrix.name }}
         version: "${{ needs.build.outputs.version }}-${{ needs.build.outputs.mc_version }}-${{ matrix.platform }}"
         version-type: ${{ needs.build.outputs.version_type }}
