@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.2
+
+Update bundled filloaxlib to fix neoforge warning
+
 ## 1.1.0
 
 - Add Trigger system
